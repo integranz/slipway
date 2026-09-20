@@ -15,8 +15,8 @@ Arguments: `$0` action, then:
 | `story create` | `--title "<text>"` (default `Onboard <project> to slipway delivery`), `--epic <KEY>` (default `jira.epic_key`) | creates the Story (parent = epic when given), writes `jira.story_key` into `.slipway/config.yaml` |
 | `story set <KEY>` | | verifies the issue exists in `jira.project_key` and is not a subtask, writes `jira.story_key` |
 | `subtask start "<title>"` | `--message` | finds the subtask `<title>` under the story or creates it, transitions it to `jira.transitions.start`; prints its key |
-| `subtask review <KEY\|"<title>">` | `--message`, `--evidence <file>` | comment + transition to `jira.transitions.review` (a deploy waiting for the human approval) |
-| `subtask done <KEY\|"<title>">` | `--message`, `--evidence <file>` | comment + transition to `jira.transitions.done`; then **auto-close**: if no subtask of the story is left open, transition the story to done with the comment "all subtasks done; closed by slipway" |
+| `subtask review <KEY\|"<title>">` | `--message`, `--evidence <file>` | by title: find or create; comment + transition to `jira.transitions.review` (a deploy waiting for the human approval, or a verification with findings) |
+| `subtask done <KEY\|"<title>">` | `--message`, `--evidence <file>` | by title: find or create the subtask (deploys started by `workflow_run` have no skill run before `verify`); comment + transition to `jira.transitions.done`; then **auto-close**: if no subtask of the story is left open, transition the story to done with the comment "all subtasks done; closed by slipway" |
 | `comment <KEY>` | `--message`, `--evidence <file>` | comment (evidence trimmed to the claims table and result line) |
 | `show [<KEY>]` | | story (default `jira.story_key`) with status and its subtasks (key, summary, status) |
 | `done <KEY>` | `--evidence` | manual close of a story or subtask; refused when the evidence file reports any REFUTED claim |
