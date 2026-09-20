@@ -1,3 +1,9 @@
+## [0.14.0](https://github.com/integranz/slipway/compare/v0.13.3...v0.14.0) (2026-09-20)
+
+### Features
+
+* **tracking:** epic → story → subtask model, tracker none, offline queue that never blocks delivery ([3335248](https://github.com/integranz/slipway/commit/3335248f256730ea1cb9fbe1c00f183206e69258))
+
 ## [0.13.3](https://github.com/integranz/slipway/compare/v0.13.2...v0.13.3) (2026-09-17)
 
 ### Bug Fixes
