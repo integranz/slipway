@@ -1,3 +1,9 @@
+## [0.15.1](https://github.com/integranz/slipway/compare/v0.15.0...v0.15.1) (2026-09-20)
+
+### Bug Fixes
+
+* **preflight:** drop an unused variable flagged by shellcheck ([7a65e72](https://github.com/integranz/slipway/commit/7a65e7203a7f035ecca51b80200ba7dd3c5413c4))
+
 ## [0.15.0](https://github.com/integranz/slipway/compare/v0.14.3...v0.15.0) (2026-09-20)
 
 ### Features
