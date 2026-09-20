@@ -1,3 +1,9 @@
+## [0.14.1](https://github.com/integranz/slipway/compare/v0.14.0...v0.14.1) (2026-09-20)
+
+### Bug Fixes
+
+* **workflows:** always-run `<app> ci` result job so required checks resolve when the gate skips the app ([2e28326](https://github.com/integranz/slipway/commit/2e28326ebeea3bbc40dde9b42c977a09f8f69411)), closes [#7](https://github.com/integranz/slipway/issues/7)
+
 ## [0.14.0](https://github.com/integranz/slipway/compare/v0.13.3...v0.14.0) (2026-09-20)
 
 ### Features
