@@ -70,3 +70,19 @@ jobs:
       is_node: <% app.is_node %>
       tag_prefix: <% app.tag_prefix %>
     secrets: inherit
+
+  result:
+    # Always produces a check named `<% app.name %> ci`, whether the app was built or skipped: reusable-workflow jobs emit
+    # no nested checks when the caller job is skipped, so a branch rule must require this check (and `<% app.name %> changes`).
+    name: <% app.name %> ci
+    needs: [<%#eq options.pr_checks "always-run-gate"%>changes, <%/eq%>ci]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "ci job result: ${{ needs.ci.result }}"
+          case "${{ needs.ci.result }}" in
+            success) echo "<% app.name %>: built and tested";;
+            skipped) echo "<% app.name %>: untouched by this change, nothing to build";;
+            *) echo "::error::<% app.name %>: CI ${{ needs.ci.result }}"; exit 1;;
+          esac

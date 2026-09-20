@@ -169,7 +169,7 @@ test("optional dimensions default to manual CD and path-filtered PR checks", () 
   const repo = mkRepo(c => { delete c.options.cd_trigger; delete c.options.pr_checks; });
   const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
   const ci = yaml.load(read(repo, ".github/workflows/slipway-demo-web-ci.yml")), cd = yaml.load(read(repo, ".github/workflows/slipway-demo-web-cd.yml"));
-  assert.deepEqual(Object.keys(ci.jobs), ["ci"], "no gate job in path-filtered mode"); assert.ok(Array.isArray(ci.on.pull_request.paths), "pull_request must be path-filtered");
+  assert.deepEqual(Object.keys(ci.jobs), ["ci", "result"], "no gate job in path-filtered mode"); assert.deepEqual(ci.jobs.result.needs, ["ci"]); assert.ok(Array.isArray(ci.on.pull_request.paths), "pull_request must be path-filtered");
   assert.equal(cd.on.workflow_run, undefined, "manual CD has no workflow_run trigger");
   assert.match(read(repo, ".claude/rules/pipelines.md"), /do \*\*not\*\* require per-app checks/);
   assert.match(read(repo, ".claude/rules/pipelines.md"), /CD is started only by/);
@@ -227,7 +227,8 @@ test("per-app CI workflows: thin callers with path filters, gate job, shared _ci
     assert.doesNotMatch(ci, /:latest/, "no mutable tags in _ci.yml");
     // per-app callers
     const web = yaml.load(read(repo, ".github/workflows/slipway-demo-web-ci.yml"));
-    assert.equal(web.name, "slipway-demo-web-ci"); assert.deepEqual(Object.keys(web.jobs), ["changes", "ci"]);
+    assert.equal(web.name, "slipway-demo-web-ci"); assert.deepEqual(Object.keys(web.jobs), ["changes", "ci", "result"]);
+    assert.equal(web.jobs.result.name, "web ci"); assert.equal(web.jobs.result.if, "always()"); assert.deepEqual(web.jobs.result.needs, ["changes", "ci"]);
     assert.equal(web.jobs.changes.name, "web changes"); assert.equal(web.jobs.ci.name, "web", "check names must be unique per app (web / test, web / image)");
     assert.equal(web.jobs.ci.uses, "./.github/workflows/_ci.yml"); assert.equal(web.jobs.ci.secrets, "inherit"); assert.equal(web.jobs.ci.if, "needs.changes.outputs.run == 'true'");
     assert.deepEqual(web.jobs.ci.with, { app: "web", app_path: "apps/web", context: "apps/web", dockerfile: "apps/web/Dockerfile", image_repository: "adlc-demo/web", test_command: "npm --prefix apps/web test", is_dotnet: false, is_node: true, tag_prefix: "web/v" });
