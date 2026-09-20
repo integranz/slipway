@@ -1,3 +1,9 @@
+## [0.15.0](https://github.com/integranz/slipway/compare/v0.14.3...v0.15.0) (2026-09-20)
+
+### Features
+
+* **launch:** one command end to end with in-session approvals, secret seeding and GitHub administration ([63104bb](https://github.com/integranz/slipway/commit/63104bb35911f751bdc29cf7afa08cb26f4eddcc))
+
 ## [0.14.3](https://github.com/integranz/slipway/compare/v0.14.2...v0.14.3) (2026-09-20)
 
 ### Bug Fixes
