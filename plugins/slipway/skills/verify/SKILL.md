@@ -21,7 +21,7 @@ Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/verify.cjs" <app> <env> <tag> --repo .`
 - on Container Apps: the active revision runs `<registry>/<repo>:<tag>`, Healthy/Running at 100 % traffic, the registry holds the tag;
 - pipeline definition: the CI trigger paths, the `version.json` pathFilters and `.slipway/config.yaml` list the same inputs (a mismatch means "re-scaffold");
 - `infra/apps/<app>` has no drift (`terraform plan -detailed-exitcode`, lock-free, read-only);
-- working tree clean, no state/plan/tfvars/key files tracked.
+- no uncommitted state/plan/tfvars/env/key files in the working tree (other uncommitted edits are noted, not refuted: they do not change the deployed artefact), no such files tracked in git.
 Exit codes: 0 all confirmed, 2 something refuted, 3 only unverifiable items.
 
 ## Step 2 — Second opinion on anything not CONFIRMED

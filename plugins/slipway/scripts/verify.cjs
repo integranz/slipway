@@ -142,7 +142,11 @@ const tf = (dir, tfArgs, timeout) => sh("terraform", [`-chdir=${dir}`, ...tfArgs
   // ---- 6. Repo hygiene ----
   const st = sh("git", ["status", "--porcelain"]);
   const dirty = st.out.split("\n").filter(l => l.trim() && !/\s\.slipway\/evidence\//.test(l)); // the verifier's own evidence files are committed afterwards
-  record("Working tree clean apart from .slipway/evidence (no state/plan/secret files staged)", st.ok && dirty.length === 0 ? "CONFIRMED" : "REFUTED", dirty.length ? dirty.slice(0, 3).join("; ") : "git status --porcelain → nothing outside .slipway/evidence");
+  const DANGEROUS = /(^|\/)(\.env(\..*)?|.*\.tfstate(\..*)?|.*\.tfvars|tfplan.*|.*\.pem|.*\.key|backend\.hcl)$/;
+  const dangerous = dirty.filter(l => DANGEROUS.test(l.slice(3).trim()) && !/\.example$/.test(l));
+  // Unrelated uncommitted edits (a config change, a doc) do not touch the deployed artefact; only delivery-sensitive files refute.
+  record("Working tree holds no uncommitted state, plan, tfvars, env or key files", st.ok && dangerous.length === 0 ? "CONFIRMED" : "REFUTED",
+    dangerous.length ? dangerous.slice(0, 3).join("; ") : (dirty.length ? `no sensitive files; ${dirty.length} other uncommitted change(s) noted: ${dirty.slice(0, 3).map(l => l.trim()).join(", ")}` : "git status --porcelain → nothing outside .slipway/evidence"));
   const tracked = sh("git", ["ls-files"]); const bad = tracked.out.split("\n").filter(f => /(^|\/)(\.env(\..*)?|.*\.tfstate(\..*)?|.*\.tfvars|tfplan.*|.*\.pem|.*\.key)$/.test(f) && !/\.example$/.test(f));
   record("No state, plan, tfvars or key files are tracked in git", bad.length === 0 ? "CONFIRMED" : "REFUTED", bad.length ? bad.join(", ") : "git ls-files → none matched");
 
