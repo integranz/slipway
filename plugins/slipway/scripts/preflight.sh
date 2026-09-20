@@ -15,7 +15,6 @@ jget() { printf '%s' "$INFO" | python3 -c 'import json,sys; d=json.load(sys.stdi
 for k in sys.argv[1].split("."):
     d=d.get(k) if isinstance(d,dict) else None
 print("" if d is None else (d if isinstance(d,str) else json.dumps(d)))' "$1"; }
-CFG=".slipway/config.yaml"
 yget() { python3 - "$1" <<'PY'
 import sys,re
 key=sys.argv[1].split("."); cur=None
