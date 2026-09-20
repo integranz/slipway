@@ -67,6 +67,9 @@ Do not edit generated files by hand afterwards. If something is wrong in a gener
 
 **Update mode from the combined layout** (plugin < 0.13.0: `ci.yml`, `cd.yml`, `infra/app`, root `version.json`): the scaffold prints a `legacy` line and never deletes. Hand the removal and the state cutover to the human/`execute` agent as described in the plugin's `docs/PIPELINES-PER-APP.md` (import blocks for the environment and each container app, human-gated applies, then `terraform state rm` in the old module). `version.json` files that already exist keep their `version`; only `pathFilters` and `release.tagName` are refreshed.
 
+## Step 4b — Cloud prerequisites (attended sessions)
+After the scaffold, run the dry run `bash .slipway/setup-azure.sh` and show what it would create. Ask with `AskUserQuestion` whether to apply now; on yes run `bash .slipway/setup-azure.sh --apply --set-github-secrets`. The guard hook forces a permission prompt naming the action; the human's answer to that prompt is the approval, and nothing else is needed (no separate terminal). In an unattended session (`--yes`, `-p`) the hook denies it: print the command for the human and continue. Re-run the dry run afterwards; it must report nothing to change. Everything beyond Azure (Docker Hub secret, GitHub environment, branch ruleset) belongs to `/slipway:launch`, which calls this skill as its first phase.
+
 ## Step 5 — Verify (verify sub-agent)
 Delegate to the `verify` sub-agent these claims: `.slipway/config.yaml` validates (`validate-config.cjs` exit 0); `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/rules/precedence.md` exist and contain no `<%`; for every app `.github/workflows/<prefix>-<app>-ci.yml` and `-cd.yml`, `infra/apps/<app>/main.tf` and (nbgv) `<app path>/version.json` exist, and the CI `on.push.paths` equal the `version.json` `pathFilters`; `.claude/settings.json` is valid JSON naming the marketplace and plugin; every `.claude/rules/*.md` other than `precedence.md` has a `paths:` list in its frontmatter; `.gitignore` contains `.slipway/approvals/`, `*.tfvars` and `tfplan*`. Report the verdict table to the user.
 
@@ -81,7 +84,7 @@ Apps: <name (kind, stack, port, health)>, …
 Generated: <n> files written, <n> skipped, <n> merged  |  Pending option templates: <list or none>
 Verification: <n> confirmed / <n> refuted / <n> unverifiable
 Tracking: story <KEY-123> (epic <KEY-1> | none), subtask <KEY-124> done | queued (n) | disabled
-Next: /slipway:dockerize <first app path>   (then commit, push: each app's CI runs only when its inputs changed)
+Next: /slipway:launch (everything else, end to end) or /slipway:dockerize <first app path>
 ```
 
 ## Do not

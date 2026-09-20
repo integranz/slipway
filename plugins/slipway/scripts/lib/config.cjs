@@ -6,7 +6,7 @@ const validateSchema = require("./validate-config.generated.cjs");
 const PLUGIN_ROOT = path.resolve(__dirname, "..", "..");
 const OPTIONS_PATH = path.join(PLUGIN_ROOT, "templates", "common", "slipway", "options.yaml");
 // Optional dimensions and the value they take when the config omits them.
-const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered" };
+const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui" };
 
 function loadYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
 function loadOptions() { return loadYaml(OPTIONS_PATH); }
@@ -136,7 +136,7 @@ function derive(config, options, repoRoot) {
   const sharedPaths = uniq((config.shared_paths || []).map(normPath));
   const pipelines = {
     name_prefix: namePrefix,
-    cd_trigger: config.options.cd_trigger, pr_checks: config.options.pr_checks,
+    cd_trigger: config.options.cd_trigger, pr_checks: config.options.pr_checks, cd_approval: config.options.cd_approval, in_session_approval: config.options.cd_approval === "in-session",
     auto_cd: config.options.cd_trigger === "on-ci-success", gate: config.options.pr_checks === "always-run-gate",
   };
   // Upstream reachability differs per compute: on Container Apps every app is reachable as http://<app-name> (port 80,

@@ -95,6 +95,12 @@ dimensions:
       manual:        { status: implemented, label: "Manual: /slipway:deploy <app> <tag> <env> dispatches <prefix>-<app>-cd" }
       on-ci-success: { status: implemented, label: "Automatic: <prefix>-<app>-cd starts when <prefix>-<app>-ci succeeds on the default branch, targeting the CD environment; the environment approval gate still applies" }
 
+  cd_approval:
+    question: How is the GitHub environment approval given for a deployment?
+    options:
+      github-ui:  { status: implemented, label: "On the workflow run page in GitHub (Review deployments), by a required reviewer" }
+      in-session: { status: implemented, label: "Also in the Claude Code session: after the plan summary, the agent approves the pending deployment through the GitHub API under the reviewer's own account, behind a forced permission prompt" }
+
   pr_checks:
     question: How does an app's CI behave on pull requests that do not touch that app?
     options:

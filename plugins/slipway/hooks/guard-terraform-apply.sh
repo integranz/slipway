@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Guardrail 1: no `terraform apply` without explicit human approval; never destroy; never -auto-approve;
 # never apply the app layer (infra/apps/<app>, formerly infra/app) from a session (CD only).
-# Approval = one-shot token written by a human with scripts/approve-apply.sh <planfile> (10 min TTL).
-# Rationale: a hook "ask" decision becomes "allow" in headless (-p) sessions, so a UI prompt is not a gate.
+# Approval = the human answering the permission prompt in an attended session (the hook forces it with the plan
+# summary as the reason), or a one-shot token written by a human with scripts/approve-apply.sh <planfile> (10 min TTL)
+# for unattended sessions. Measured 2026-09-20: in `claude -p` a hook "ask" refuses the call (nobody can answer), so the
+# token is the only way to approve there; earlier notes claiming "ask becomes allow" were wrong.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 tool="$(hook_json tool_name)"; [ "$tool" = "Bash" ] || exit 0
@@ -46,11 +48,19 @@ case "$planfile" in /*) planpath="$planfile";; *) planpath="$dir/$planfile";; es
 [ -f "$planpath" ] || deny "Plan file '$planfile' does not exist in $dir. Re-run /slipway:plan and apply the exact plan file it produced."
 
 root="$(repo_root "$dir")"; sha="$(sha256_file "$planpath")"; token="$root/.slipway/approvals/$sha"
-[ -f "$token" ] || deny "No human approval found for plan '$planfile'.
-A human (not the agent) must run, in a separate terminal:
+if [ -f "$token" ]; then
+  expiry="$(sed -n '2p' "$token" | tr -dc '0-9')"; now="$(date +%s)"
+  if [ -z "$expiry" ] || [ "$now" -gt "$expiry" ]; then rm -f "$token"; deny "Approval for '$planfile' has expired (10 min TTL). Ask the human to approve again."; fi
+  rm -f "$token"   # single use
+  allow_with_reason "Human-approved plan $planfile (sha256 ${sha:0:12}) applied once; approval consumed."
+fi
+if attended; then
+  # In-session approval: force the permission prompt and put the plan summary in front of the human.
+  summary="$(cd "$dir" 2>/dev/null && terraform show -no-color "$planfile" 2>/dev/null | grep -E '^(Plan:|No changes)' | head -1 || true)"
+  [ -n "$summary" ] || summary="plan summary unavailable here; read the output of /slipway:plan before approving"
+  ask_with_reason "terraform apply of $planfile in ${dir#"$root"/} (sha256 ${sha:0:12}). $summary. Approve only if this is the plan you reviewed; it is applied exactly once."
+fi
+deny "No human approval found for plan '$planfile' and this session is unattended (no one can answer a prompt).
+A human must run, in their own terminal:
   bash <plugin-root>/scripts/approve-apply.sh $planpath
 The approval is single-use and expires after 10 minutes. Then re-run this exact apply command."
-expiry="$(sed -n '2p' "$token" | tr -dc '0-9')"; now="$(date +%s)"
-if [ -z "$expiry" ] || [ "$now" -gt "$expiry" ]; then rm -f "$token"; deny "Approval for '$planfile' has expired (10 min TTL). Ask the human to approve again."; fi
-rm -f "$token"   # single use
-allow_with_reason "Human-approved plan $planfile (sha256 ${sha:0:12}) applied once; approval consumed."

@@ -2,7 +2,8 @@
 
 ## Non-negotiables (<% project.name %>)
 - Infrastructure changes go through Terraform under the slipway guard hooks. `terraform apply` for `infra/foundation` needs a human approval token; `infra/apps/<app>` is applied only by that app's CD workflow. Never `-auto-approve`, never `destroy` from a session.
-- Never commit secrets, `*.tfvars` (other than `*.example`), state, plan or `.env` files. Secrets are referenced (`var.*`, Key Vault references, `${{ secrets.NAME }}`), never written.
+- Never commit secrets, `*.tfvars` (other than `*.example`), state, plan or `.env` files. Secrets are referenced (`var.*`, Key Vault references, `${{ secrets.NAME }}`), never written. The seed file `.slipway/.env` is only ever sourced into a command (`set -a; . .slipway/.env; set +a`), never read, printed or pasted; secrets reach GitHub from the clipboard or that file (`gh secret set NAME --body …`), and their values never appear in the conversation.
+- Cloud and GitHub administration (`setup-azure.sh --apply`, environments, rulesets, deployment approvals, secrets) runs in this session only behind the permission prompt the guard hook forces; unattended sessions are denied and hand the command to a human.
 - Image tags are immutable semver produced by the configured versioning tool (<% derived.option_labels.versioning %>). Never push or deploy `latest` or a branch name.
 - `.slipway/config.yaml` is the single source of truth for delivery options and apps. Change it with `/slipway:bootstrap`; do not hand-edit generated files to switch options.
 - Verify before asserting: a claim about a build, deployment or ticket needs a command output or URL as evidence (`/slipway:verify`).

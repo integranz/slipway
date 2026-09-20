@@ -18,6 +18,7 @@ options:
   base_image: dhi
   cd_trigger: on-ci-success   # optional (default manual): <prefix>-<app>-cd also starts when <prefix>-<app>-ci succeeds on main
   pr_checks: always-run-gate  # optional (default path-filtered): per-app CI checks are safe to require on the branch
+  cd_approval: in-session     # optional (default github-ui): /slipway:deploy may approve the pending deployment via the GitHub API after you confirm
 
 azure:
   # subscription_id / tenant_id are optional: omit them and set ARM_SUBSCRIPTION_ID / ARM_TENANT_ID

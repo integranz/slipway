@@ -17,6 +17,7 @@ Local development: `claude --plugin-dir ./plugins/slipway`.
 ## Skills (invoked as `/slipway:<name>`)
 | Skill | Kind | Purpose |
 |---|---|---|
+| `launch` | command | The whole delivery in one command, resumable; stops only for human decisions and in-session approvals |
 | `bootstrap` | user + model invoked | Intake interview → `.slipway/config.yaml` → classify apps → scaffold repo-side files → open ticket |
 | `dockerize` | command | Write/refresh a hardened multi-stage Dockerfile for one app and prove it runs |
 | `plan` | command | `terraform fmt/validate/plan` for one layer (`foundation` or `apps/<app>`); never applies |
@@ -37,6 +38,8 @@ The plugin reads `.slipway/config.yaml` and repository files. It sends nothing a
 | `scripts/app-info.cjs [<app>] [--json]` | Derived delivery facts per app: workflow names, tag prefix, build context, `infra/apps/<app>`, state key, inputs |
 | `scripts/verify.cjs <app> <env> <tag>` | Deterministic post-deployment claims for one app; writes `.slipway/evidence/<app>/<tag>.md` |
 | `scripts/approve-apply.sh <planfile>` | Human-only, one-shot, 10-minute approval for one `terraform apply` |
+| `scripts/preflight.sh [--repo <dir>]` | Read-only preflight: tools, logins, repository secrets/variables, environment, ruleset, Azure prerequisites |
+| `scripts/ruleset.cjs` | GitHub ruleset JSON for the default branch: pull requests only plus the per-app `<app> changes` / `<app> ci` checks |
 | `scripts/tracking-queue.cjs add\|list\|pop\|clear` | Offline queue of tracker updates when Jira is unreachable; replayed by `/slipway:ticket sync` |
 
 ## Pipelines per app

@@ -8,10 +8,11 @@ git -C "$T" init -q -b main; mkdir -p "$T/infra/foundation" "$T/infra/app" "$T/i
 printf 'plan' > "$T/infra/foundation/tfplan.dev"; printf 'plan' > "$T/infra/app/tfplan.dev"; printf 'plan' > "$T/infra/apps/api/tfplan.dev"
 printf '.slipway/approvals/\n*.tfvars\n!*.tfvars.example\ntfplan*\n' > "$T/.gitignore"; git -C "$T" add .gitignore; git -C "$T" -c user.email=t@t -c user.name=t commit -qm init
 
-json_bash() { # cmd cwd [agent_type]
-  python3 -c 'import json,sys; d={"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2]}
+json_bash() { # cmd cwd [agent_type] [permission_mode]
+  python3 -c 'import json,sys; d={"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2],"permission_mode":(sys.argv[4] if len(sys.argv)>4 and sys.argv[4] else "default")}
 if len(sys.argv)>3 and sys.argv[3]: d["agent_type"]=sys.argv[3]
-print(json.dumps(d))' "$1" "$2" "${3:-}"; }
+print(json.dumps(d))' "$1" "$2" "${3:-}" "${4:-}"; }
+json_read() { python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":sys.argv[1]},"cwd":sys.argv[2],"permission_mode":"default"}))' "$1" "$2"; }
 json_write() { python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"PreToolUse","tool_name":sys.argv[1],"tool_input":{"file_path":sys.argv[2],"content":sys.argv[3]},"cwd":sys.argv[4]}))' "$1" "$2" "$3" "$4"; }
 json_mcp() { python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"mcp__plugin_slipway_github__actions_run_trigger","tool_input":{"method":"run_workflow","workflow_id":sys.argv[1],"ref":"main","inputs":{"tag":sys.argv[2],"environment":"dev"}},"cwd":"/tmp"}))' "$1" "$2"; }
 
@@ -60,6 +61,52 @@ expect "apply -no-color planfile | cat"        guard-terraform-apply.sh 2 "$(jso
 expect "env prefix stripped"                  guard-terraform-apply.sh 2 "$(json_bash 'TF_LOG=debug terraform apply' "$T/infra/foundation")"
 
 echo "guard-secrets-and-state"
+
+echo "guard-terraform-apply: attended in-session approval"
+ASK='"permissionDecision":"ask"'
+rm -rf "$T/.slipway/approvals"
+export CLAUDE_CODE_SESSION_ATTENDED=0
+expect "no token, unattended -> denied"          guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")"
+export CLAUDE_CODE_SESSION_ATTENDED=1
+expect "no token, attended -> ask (prompt)"       guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" "$ASK"
+expect "attended but bypassPermissions -> denied" guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation" "" bypassPermissions)"
+expect "attended but dontAsk -> denied"           guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation" "" dontAsk)"
+bash "$P/scripts/approve-apply.sh" "$T/infra/foundation/tfplan.dev" >/dev/null
+expect "valid token, attended -> allow, consumed" guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" '"permissionDecision":"allow"'
+expect "destroy still denied when attended"       guard-terraform-apply.sh 2 "$(json_bash 'terraform destroy' "$T/infra/foundation")"
+expect "app layer still denied when attended"     guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/apps/api")"
+unset CLAUDE_CODE_SESSION_ATTENDED
+
+echo "guard-admin-actions"
+mkdir -p "$T/.slipway"; printf 'DOCKERHUB_TOKEN=x\n' > "$T/.slipway/.env"; printf 'DOCKERHUB_TOKEN=\n' > "$T/.slipway/.env.example"
+expect "setup-azure dry run allowed"              guard-admin-actions.sh 0 "$(json_bash 'bash .slipway/setup-azure.sh' "$T")"
+expect "setup-azure --apply unattended denied"    guard-admin-actions.sh 2 "$(json_bash 'bash .slipway/setup-azure.sh --apply --set-github-secrets' "$T")"
+export CLAUDE_CODE_SESSION_ATTENDED=1
+expect "setup-azure --apply attended -> ask"      guard-admin-actions.sh 0 "$(json_bash 'bash .slipway/setup-azure.sh --apply --set-github-secrets' "$T")" "$ASK"
+expect "gh api GET allowed"                       guard-admin-actions.sh 0 "$(json_bash 'gh api repos/o/r/environments/dev --jq .id' "$T")"
+expect "gh api PUT environment -> ask"            guard-admin-actions.sh 0 "$(json_bash 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")" "$ASK"
+expect "gh api POST pending_deployments -> ask"   guard-admin-actions.sh 0 "$(json_bash 'gh api -X POST repos/o/r/actions/runs/123/pending_deployments -f state=approved' "$T")" 'runs/123'
+expect "gh api POST rulesets -> ask"              guard-admin-actions.sh 0 "$(json_bash 'gh api -X POST repos/o/r/rulesets --input rules.json' "$T")" "$ASK"
+expect "gh secret set -> ask"                     guard-admin-actions.sh 0 "$(json_bash 'gh secret set DOCKERHUB_TOKEN -R o/r --body "$(pbpaste)"' "$T")" 'DOCKERHUB_TOKEN'
+expect "gh variable set -> ask"                   guard-admin-actions.sh 0 "$(json_bash 'gh variable set DOCKERHUB_USERNAME -R o/r --body abdelazim' "$T")" "$ASK"
+expect "source seed file then gh secret set -> ask" guard-admin-actions.sh 0 "$(json_bash 'set -a; . .slipway/.env; set +a; gh secret set DOCKERHUB_TOKEN -R o/r --body "$DOCKERHUB_TOKEN"' "$T")" "$ASK"
+unset CLAUDE_CODE_SESSION_ATTENDED
+expect "gh api POST pending_deployments unattended denied" guard-admin-actions.sh 2 "$(json_bash 'gh api -X POST repos/o/r/actions/runs/123/pending_deployments -f state=approved' "$T")"
+expect "gh secret set unattended denied"          guard-admin-actions.sh 2 "$(json_bash 'gh secret set DOCKERHUB_TOKEN -R o/r --body x' "$T")"
+expect "cat seed file denied"                     guard-admin-actions.sh 2 "$(json_bash 'cat .slipway/.env' "$T")"
+expect "grep seed file denied"                    guard-admin-actions.sh 2 "$(json_bash 'grep TOKEN .slipway/.env' "$T")"
+expect "sourcing seed file alone allowed"         guard-admin-actions.sh 0 "$(json_bash 'source .slipway/.env && docker login dhi.io -u "$DOCKERHUB_USERNAME" --password-stdin <<<"$DOCKERHUB_TOKEN"' "$T")"
+expect "echo secret variable denied"              guard-admin-actions.sh 2 "$(json_bash 'echo $DOCKERHUB_TOKEN' "$T")"
+expect "printf non-secret variable allowed"       guard-admin-actions.sh 0 "$(json_bash 'printf "%s" "$AZURE_CLIENT_ID"' "$T")"
+expect "bare env denied"                          guard-admin-actions.sh 2 "$(json_bash 'env' "$T")"
+expect "env piped denied"                         guard-admin-actions.sh 2 "$(json_bash 'env | grep -i claude' "$T")"
+expect "env with command allowed"                 guard-admin-actions.sh 0 "$(json_bash 'env FOO=1 node scripts/x.cjs' "$T")"
+expect "printenv HOME allowed"                    guard-admin-actions.sh 0 "$(json_bash 'printenv HOME' "$T")"
+expect "Read seed file denied"                    guard-admin-actions.sh 2 "$(json_read "$T/.slipway/.env" "$T")"
+expect "Read seed example allowed"                guard-admin-actions.sh 0 "$(json_read "$T/.slipway/.env.example" "$T")"
+expect "Read README allowed"                      guard-admin-actions.sh 0 "$(json_read "$T/README.md" "$T")"
+rm -f "$T/.slipway/.env" "$T/.slipway/.env.example"   # the seed files would (correctly) trip the secrets guard in later git add tests
+
 printf 'x' > "$T/secrets.tfvars"; printf 'x' > "$T/dev.tfvars.example"; printf 'x' > "$T/main.tf"; printf 'x' > "$T/.env"; printf 'x' > "$T/terraform.tfstate"
 expect "git add main.tf allowed"              guard-secrets-and-state.sh 0 "$(json_bash 'git add main.tf' "$T")"
 expect "git add tfvars denied"                guard-secrets-and-state.sh 2 "$(json_bash 'git add secrets.tfvars' "$T")"

@@ -26,7 +26,12 @@ Preferred: GitHub MCP `actions_run_trigger` with `method: run_workflow`, `workfl
 
 ## Step 3 — Watch and hand over the approval
 1. Poll (`gh run watch <id>` or `actions_get` every 15 s). The `plan` job publishes the plan summary; the `apply` job then **waits for a human** on the `<env>` environment.
-2. As soon as the run reaches "waiting", tell the user: the plan summary URL, the exact resource changes (`Plan: x to add, y to change, z to destroy`; a healthy app deploy changes exactly one `azurerm_container_app`), and where to approve (`https://github.com/<owner>/<repo>/actions/runs/<id>`). Never approve it yourself; you cannot and must not.
+2. As soon as the run reaches "waiting", tell the user: the plan summary URL, the exact resource changes (`Plan: x to add, y to change, z to destroy`; a healthy app deploy changes exactly one `azurerm_container_app`), and where to approve (`https://github.com/<owner>/<repo>/actions/runs/<id>`).
+   - `options.cd_approval: github-ui` (default): the human approves on that page; never approve yourself.
+   - `options.cd_approval: in-session`: ask with `AskUserQuestion` ("Approve <app> <tag> → <env>? plan: …") and, only on an explicit approve, run
+     `gh api repos/<owner>/<repo>/actions/runs/<id>/pending_deployments` to read the waiting environment (`environment.id`, `current_user_can_approve`), then
+     `gh api -X POST repos/<owner>/<repo>/actions/runs/<id>/pending_deployments --input -` with `{"environment_ids":[<id>],"state":"approved","comment":"approved via slipway by <gh user> after plan review: <Plan: line>"}`.
+     The guard hook forces a permission prompt for this call (the reason names the run), so the human confirms twice: the question and the prompt. The approval is recorded under the human's own GitHub account (only required reviewers can call this endpoint). In an unattended session the hook denies the call: print the URL and wait. A "reject" answer posts `state: rejected` the same way.
 3. After approval, keep polling until completion. On failure: `gh run view <id> --log-failed` (or `get_job_logs` with `failed_only`), quote the first failing lines, and stop; do not retry automatically.
 4. On success: download `deploy-evidence-<app>-<env>-<tag>` and read `outputs.json` (`url`, `health_url`, `latest_revision`) and `smoke.txt`.
 

@@ -66,11 +66,15 @@ test("scaffold renders the common set for the example config", () => {
   assert.match(read(repo, ".claude/rules/terraform.md"), /infra\/apps\/<app>/); assert.match(read(repo, ".claude/rules/terraform.md"), /Container Apps environment/);
   assert.match(read(repo, ".claude/rules/branching.md"), /trunk-based/);
   const setup = read(repo, ".slipway/SETUP.md");
-  for (const n of ["AZURE_CLIENT_ID", "AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID", "DOCKERHUB_TOKEN", "DOCKERHUB_USERNAME",
-                   "repo:integranz/slipway-demo:ref:refs/heads/main", "repo:integranz/slipway-demo:environment:dev",
-                   "stadlctfstate", "rg-slipway-tfstate", "--allow-shared-key-access false", "api://AzureADTokenExchange"]) {
+  for (const n of ["AZURE_CLIENT_ID", "AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID", "DOCKERHUB_TOKEN", "DOCKERHUB_USERNAME", "/slipway:launch",
+                   "setup-azure.sh --apply --set-github-secrets", "integranz/slipway-demo", "rg-adlc-demo-dev", "acradlcdemo", "kv-adlc-demo-dev",
+                   "`api changes`, `api ci`, `web changes`, `web ci`", "you can give in the session", ".slipway/.env"]) {
     assert.ok(setup.includes(n), `SETUP.md missing ${n}`);
   }
+  const seed = read(repo, ".slipway/.env.example");
+  assert.match(seed, /^DOCKERHUB_USERNAME=$/m); assert.match(seed, /^DOCKERHUB_TOKEN=$/m); assert.doesNotMatch(seed, /<%/);
+  assert.match(read(repo, "CLAUDE.md"), /seed file `\.slipway\/\.env` is only ever sourced/);
+  assert.match(agents, /\/slipway:launch/);
   assert.doesNotMatch(setup, /<%/, "unrendered placeholder in SETUP.md");
   const script = read(repo, ".slipway/setup-azure.sh");
   assert.doesNotMatch(script, /<%/, "unrendered placeholder in setup-azure.sh");
@@ -166,8 +170,9 @@ test("planned or later options are rejected before anything is written", () => {
 });
 
 test("optional dimensions default to manual CD and path-filtered PR checks", () => {
-  const repo = mkRepo(c => { delete c.options.cd_trigger; delete c.options.pr_checks; });
+  const repo = mkRepo(c => { delete c.options.cd_trigger; delete c.options.pr_checks; delete c.options.cd_approval; });
   const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
+  assert.match(read(repo, ".slipway/SETUP.md"), /on the workflow run page/, "default cd_approval is github-ui");
   const ci = yaml.load(read(repo, ".github/workflows/slipway-demo-web-ci.yml")), cd = yaml.load(read(repo, ".github/workflows/slipway-demo-web-cd.yml"));
   assert.deepEqual(Object.keys(ci.jobs), ["ci", "result"], "no gate job in path-filtered mode"); assert.deepEqual(ci.jobs.result.needs, ["ci"]); assert.ok(Array.isArray(ci.on.pull_request.paths), "pull_request must be path-filtered");
   assert.equal(cd.on.workflow_run, undefined, "manual CD has no workflow_run trigger");

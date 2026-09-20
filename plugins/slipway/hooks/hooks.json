@@ -1,5 +1,5 @@
 {
-  "description": "slipway guardrails: no terraform apply without a human approval token (never destroy / -auto-approve / app layer), no secrets, tfvars, state or plan files in git and no secret literals in infra or workflow files, only immutable image tags are pushed or deployed, explore/verify sub-agents stay read-only.",
+  "description": "slipway guardrails: no terraform apply without a human approval token (never destroy / -auto-approve / app layer), no secrets, tfvars, state or plan files in git and no secret literals in infra or workflow files, only immutable image tags are pushed or deployed, explore/verify sub-agents stay read-only, cloud/GitHub administration and secret writes run only behind a forced permission prompt in an attended session, the seed file .slipway/.env is sourced but never printed.",
   "hooks": {
     "PreToolUse": [
       {
@@ -24,6 +24,11 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-readonly-agents.sh\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-admin-actions.sh\"",
+            "timeout": 20
           }
         ]
       },
@@ -34,6 +39,16 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-secrets-and-state.sh\"",
             "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-admin-actions.sh\"",
+            "timeout": 10
           }
         ]
       },

@@ -37,6 +37,21 @@ allow_with_reason() { # $1 = reason ; explicit allow decision
   exit 0
 }
 
+ask_with_reason() { # $1 = reason shown to the human in the permission prompt ; forces the prompt (also in auto mode)
+  local r; r="$(printf '%s' "$1" | sed 's/"/\\"/g' | tr '\n' ' ')"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s"}}\n' "$r"
+  exit 0
+}
+
+# A human can answer a permission prompt only in an attended session. Claude Code exports CLAUDE_CODE_SESSION_ATTENDED=1
+# to hooks of a terminal session a person is watching (0 for `claude -p`, background jobs and child sessions; measured
+# 2026-09-20, not documented, so absence fails safe). bypassPermissions and dontAsk never show a prompt: treat as unattended.
+attended() {
+  [ "${CLAUDE_CODE_SESSION_ATTENDED:-0}" = "1" ] || return 1
+  case "$(hook_json permission_mode)" in bypassPermissions|dontAsk) return 1;; esac
+  return 0
+}
+
 warn_and_continue() { # $1 = message shown to the user, no decision
   local m; m="$(printf '%s' "$1" | sed 's/"/\\"/g' | tr '\n' ' ')"
   printf '{"systemMessage":"slipway guard: %s"}\n' "$m"

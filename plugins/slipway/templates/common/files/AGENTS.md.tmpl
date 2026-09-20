@@ -13,7 +13,8 @@
 | Path | Purpose |
 |---|---|
 | `.slipway/config.yaml` | Delivery options and app inventory (source of truth for every slipway skill) |
-| `.slipway/SETUP.md`, `.slipway/setup-azure.sh` | One-time human prerequisites (checklist + idempotent script, dry run by default): GitHub secrets/variables, environment, Entra app registration with OIDC, state storage, RBAC |
+| `.slipway/SETUP.md`, `.slipway/setup-azure.sh` | Prerequisites: what a human does (logins, Docker Hub token, MCP grant) and what `/slipway:launch` automates behind permission prompts (Entra app + OIDC, state storage, RBAC, secrets, environment, ruleset) |
+| `.slipway/.env.example` | Seed file template for local secrets; the copy `.slipway/.env` is gitignored, only ever sourced, never printed |
 | `.slipway/evidence/<app>/` | Verification records per app and deployed tag |
 | `infra/foundation/` | Shared cloud resources (registry, key vault, identity, logs<%#eq options.compute "aca"%>, Container Apps environment<%/eq%>). Applied by a human after `/slipway:plan`; never by an agent alone |
 <%#each derived.apps%>| `<% infra_dir %>/` | Compute + image tag of `<% name %>` only (own state). Applied only by `<% workflow_cd %>` behind the environment approval |
@@ -39,6 +40,7 @@ Change an option with `/slipway:bootstrap`; do not edit generated files by hand 
 ## I want to…
 | Goal | Run |
 |---|---|
+| Do everything end to end, resumable (preflight → bootstrap → cloud and GitHub prerequisites → images → foundation → CI/CD → verify → tracking) | `/slipway:launch` |
 | Onboard or change delivery options | `/slipway:bootstrap` |
 | Build and smoke-test one app image locally | `/slipway:dockerize <app path>` |
 | Run every app image together locally | `VERSION=$(nbgv get-version -v SemVer2) docker compose up --build` (see `compose.yaml`) |
@@ -52,7 +54,8 @@ Change an option with `/slipway:bootstrap`; do not edit generated files by hand 
 
 ## Skills
 <available_skills>
-- slipway:bootstrap — intake interview, app classification, scaffold, ticket
+- slipway:launch — the whole delivery in one command; stops only for human decisions and approvals
+- slipway:bootstrap — intake interview, app classification, scaffold, cloud prerequisites, ticket
 - slipway:dockerize — hardened multi-stage Dockerfile for one app, built and health-checked
 - slipway:plan — terraform fmt/validate/plan for one layer; never applies
 - slipway:deploy — trigger and monitor CD for an immutable tag

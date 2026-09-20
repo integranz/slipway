@@ -127,6 +127,13 @@
             "always-run-gate"
           ],
           "description": "Optional (default path-filtered). always-run-gate makes per-app CI checks safe to require on the branch."
+        },
+        "cd_approval": {
+          "enum": [
+            "github-ui",
+            "in-session"
+          ],
+          "description": "Optional (default github-ui). in-session lets /slipway:deploy approve the pending deployment through the GitHub API after the human confirms the plan, recorded under the human's account."
         }
       }
     },

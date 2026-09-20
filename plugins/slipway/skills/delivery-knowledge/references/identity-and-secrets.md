@@ -79,3 +79,10 @@ az ad app federated-credential list --id <app-object-id> --query "[].subject" -o
 az role assignment list --assignee <client-id> --all --query "[].{role:roleDefinitionName,scope:scope}" -o table
 az storage account show -n <state_sa> --query allowSharedKeyAccess     # false
 ```
+
+## End-user credential flow (plugin ≥ 0.15.0, decided with the owner 2026-09-20)
+- Logins stay human: `az login`, `gh auth login`, `docker login dhi.io`, `/mcp` for the Atlassian and GitHub servers. Headless runs reuse the MCP grants (measured 2026-09-20).
+- Identifiers (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) are written by `setup-azure.sh --apply --set-github-secrets`, which the agent runs in the session behind a forced permission prompt.
+- The one real secret, `DOCKERHUB_TOKEN`, reaches GitHub without entering the transcript: clipboard (`gh secret set NAME --body "$(pbpaste)"`; Linux `xclip -o`/`wl-paste`) or the seed file `.slipway/.env` (gitignored copy of `.slipway/.env.example`; only ever sourced: `set -a; . .slipway/.env; set +a; gh secret set NAME --body "$NAME"`). The guard hook denies reading or printing the seed file and echoing secret-named variables. Claude Code offers no secure input; the `!` prefix has no hidden stdin.
+- Deployment approvals: GitHub's `POST /repos/{owner}/{repo}/actions/runs/{run_id}/pending_deployments` with `environment_ids`, `state` (`approved`/`rejected`) and `comment` (all required); usable by a required reviewer with read access; recorded under that account. `cd_approval: in-session` uses it after an explicit answer, behind a forced permission prompt.
+- Session attendance: hooks see `CLAUDE_CODE_SESSION_ATTENDED=1` in a watched terminal session (owner measured 2026-09-20), `0` in `claude -p`, background jobs and child sessions; `CLAUDE_CODE_ENTRYPOINT` is `cli` vs `sdk-cli`. Undocumented, so hooks fail safe when the variable is absent.
