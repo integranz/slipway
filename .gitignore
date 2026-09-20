@@ -10,3 +10,5 @@ tfplan*
 .env
 .env.*
 .terraform/
+# plugin templates for seed-file examples are content, not secrets
+!plugins/slipway/templates/**/.env.example.tmpl
