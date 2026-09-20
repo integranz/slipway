@@ -1,3 +1,9 @@
+## [0.15.2](https://github.com/integranz/slipway/compare/v0.15.1...v0.15.2) (2026-09-20)
+
+### Bug Fixes
+
+* **templates:** track the seed-file example template (was excluded by the repo's .env ignore rule) ([1a5d30c](https://github.com/integranz/slipway/commit/1a5d30c7b367eda82edf6caa48a95a2488cdbaaa))
+
 ## [0.15.1](https://github.com/integranz/slipway/compare/v0.15.0...v0.15.1) (2026-09-20)
 
 ### Bug Fixes
