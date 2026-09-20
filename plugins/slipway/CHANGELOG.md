@@ -1,3 +1,9 @@
+## [0.14.3](https://github.com/integranz/slipway/compare/v0.14.2...v0.14.3) (2026-09-20)
+
+### Bug Fixes
+
+* **tracking:** story follows its subtasks, mandatory auto-close line, tool surface facts; verify hygiene claim refutes only on sensitive files ([85e32ee](https://github.com/integranz/slipway/commit/85e32ee74d57f55b14513faa5f05a6c59a05f7e2))
+
 ## [0.14.2](https://github.com/integranz/slipway/compare/v0.14.1...v0.14.2) (2026-09-20)
 
 ### Bug Fixes
