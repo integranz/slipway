@@ -1,3 +1,9 @@
+## [0.14.2](https://github.com/integranz/slipway/compare/v0.14.1...v0.14.2) (2026-09-20)
+
+### Bug Fixes
+
+* **skills:** verify records the deploy subtask (find or create), covering deployments started by workflow_run ([8e1afb6](https://github.com/integranz/slipway/commit/8e1afb6afc49535798e6e962c4523739d7da09be))
+
 ## [0.14.1](https://github.com/integranz/slipway/compare/v0.14.0...v0.14.1) (2026-09-20)
 
 ### Bug Fixes
