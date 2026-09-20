@@ -10,3 +10,4 @@ One file per implemented option or concern:
 - `versioning-nbgv.md`
 - `versioning-semantic-release.md`
 - `compute-aca.md`
+- `tracker-jira.md` — epic → story → subtask model, Jira parent-field facts, Rovo MCP tools, offline queue

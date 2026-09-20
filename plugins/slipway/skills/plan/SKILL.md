@@ -21,6 +21,9 @@ The resource group and the state storage are created by `.slipway/setup-azure.sh
 2. Azure identity: `az account show` succeeds. Export `ARM_SUBSCRIPTION_ID` from it for the Terraform commands (the provider requires it and it is not committed). If `az account show` fails, stop: "run `az login && az account set --subscription <id>`".
 3. Working tree: note uncommitted changes under `infra/` in the summary; do not commit.
 
+## Tracking
+For `--layer foundation` (a unit of work with a human apply), unless `options.tracker: none`: `/slipway:ticket subtask start "Foundation <env>: plan and apply"` before planning; after the human-approved apply completes in the session, `/slipway:ticket subtask done "Foundation <env>: plan and apply" --message "<Apply complete line>"`. App-module plans are read-only previews and need no subtask.
+
 ## Steps (run them yourself; all are read-only against the cloud)
 ```
 export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)

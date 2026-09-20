@@ -94,6 +94,7 @@
         "tracker": {
           "enum": [
             "jira",
+            "none",
             "asana",
             "azure-devops"
           ]
@@ -250,6 +251,21 @@
               "default": "Done"
             }
           }
+        },
+        "epic_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,9}-[0-9]+$",
+          "description": "Optional. Epic the delivery story is attached to (parent field). Asked in the interview."
+        },
+        "story_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,9}-[0-9]+$",
+          "description": "Optional. The current delivery story: skills create one subtask per unit of work under it. Written by /slipway:ticket story create|set; change it here for a new change request."
+        },
+        "subtask_issue_type": {
+          "type": "string",
+          "default": "Subtask",
+          "description": "Name of the subtask issue type in this project (team-managed: Subtask; company-managed: Sub-task). Discovered from the project's issue types when not set."
         }
       }
     },

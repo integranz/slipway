@@ -38,10 +38,16 @@ github:
   default_branch: main
   cd_environment: dev
 
+# Tracking model: epic (optional, yours) -> one Story per delivery (onboarding, then one per change request) -> one Subtask
+# per unit of work (bootstrap, dockerize <app>, foundation <env>, deploy <app> <tag> -> <env>). Skills keep the subtasks current;
+# the story closes itself when every subtask is done. options.tracker: none disables all of this; an unreachable Jira never blocks.
 jira:
   site_url: https://integranz.atlassian.net
   project_key: ADLC
   issue_type: Story
+  # epic_key: ADLC-1        # optional: parent epic of the story
+  # story_key: ADLC-12      # current story; written by /slipway:ticket story create|set, change it for a new change request
+  subtask_issue_type: Subtask
   transitions:
     start: In Progress
     review: In Review

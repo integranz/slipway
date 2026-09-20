@@ -1,5 +1,6 @@
 # slipway: local-only artefacts (guard hooks also block committing these)
 .slipway/approvals/
+.slipway/tracking-queue.jsonl
 *.tfstate
 *.tfstate.*
 *.tfvars

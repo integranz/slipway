@@ -1,6 +1,6 @@
 # MCP integration (goal 5)
 
-Status: **golden path completed 2026-09-16** on `integranz.atlassian.net` (Jira project `DEVOPS`, issue **DEVOPS-5**): `/slipway:ticket create → start → review → done`, each step followed by a `getJiraIssue` read-back. Servers are declared in `plugins/slipway/.mcp.json`.
+Status: **golden path completed 2026-09-16** (flat story); **tracking model epic → story → subtasks shipped in plugin 0.14.0 on 2026-09-17**, its golden path is scheduled with the owner. Original note: on `integranz.atlassian.net` (Jira project `DEVOPS`, issue **DEVOPS-5**): `/slipway:ticket create → start → review → done`, each step followed by a `getJiraIssue` read-back. Servers are declared in `plugins/slipway/.mcp.json`.
 
 | Server | Transport | Auth | Used by | Write operations |
 |---|---|---|---|---|
@@ -30,3 +30,9 @@ Status: **golden path completed 2026-09-16** on `integranz.atlassian.net` (Jira 
 - [x] `/slipway:deploy` dispatching the CD workflow (`cd.yml` then; `<prefix>-<app>-cd.yml` since 0.13.0) and polling to the approval gate (2026-09-15 and 2026-09-16; `gh` CLI path, since the GitHub MCP grant is per interactive session).
 - [x] `verify` reading Container Apps revisions and ACR digests (2026-09-16) — via `az` CLI in the script; the read-only Azure MCP server was handshake-tested (2026-09-13) and remains the MCP path for agents without CLI access.
 - Login note: the first OAuth attempt failed with Atlassian's "Your account isn't associated with a supported site"; the retry succeeded after the checks in the golden path procedure (site-owner account, Rovo MCP server enabled under Rovo in Atlassian Administration, Standard+ plan).
+
+## Tracking model (plugin ≥ 0.14.0, decided with the owner on 2026-09-17)
+- **Epic** (optional, asked in the interview) → **Story** per delivery of the repository (onboarding, then one per change request; key in `jira.story_key`) → **Subtask** per unit of work (`Bootstrap <project>`, `Dockerize <app>`, `Foundation <env>: plan and apply`, `Deploy <app> <tag> → <env>`; verification is a comment on the deploy subtask).
+- Every skill keeps its subtask current (start → review while waiting for the human approval → done with links); the story auto-closes when no subtask is open. Reads back every write.
+- **Never a blocker**: `options.tracker: none` disables tracking; with Jira configured but unreachable, the ticket skill queues the update in `.slipway/tracking-queue.jsonl` (gitignored; `scripts/tracking-queue.cjs`) and `/slipway:ticket sync` replays it after `/mcp`.
+- Facts and the one open check (whether `createJiraIssue` exposes `parent` directly): `plugins/slipway/skills/delivery-knowledge/references/tracker-jira.md`.

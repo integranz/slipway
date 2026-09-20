@@ -69,6 +69,7 @@ dimensions:
     question: Where is the work tracked?
     options:
       jira:         { status: implemented, label: Jira Cloud (Atlassian Rovo MCP Server; Standard plan or higher) }
+      none:         { status: implemented, label: "No tracker: skills print 'tracking: disabled' and continue" }
       asana:        { status: later,       label: Asana }
       azure-devops: { status: later,       label: Azure DevOps Boards }
 

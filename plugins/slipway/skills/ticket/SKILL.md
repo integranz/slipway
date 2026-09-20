@@ -1,50 +1,61 @@
 ---
 name: ticket
-description: Create, transition or comment on the work item that tracks this repository's delivery in the configured tracker (Jira through the Atlassian Rovo MCP Server), with a structured description and evidence links.
+description: Keep the tracker current for this repository's delivery through the Atlassian Rovo MCP Server: one Story per delivery (attached to an optional Epic), one Subtask per unit of work, read-backs after every write, and an offline queue so an unreachable tracker never blocks delivery.
 disable-model-invocation: true
-allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" *), Bash(git rev-parse *), Bash(git remote *), Bash(gh run list *), Bash(gh run view *)
+allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Edit, Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/tracking-queue.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/app-info.cjs" *), Bash(git rev-parse *), Bash(git remote *), Bash(git status *), Bash(gh run list *), Bash(gh run view *)
 ---
 
-# /slipway:ticket — tracker lifecycle
+# /slipway:ticket — tracker lifecycle (epic → story → subtasks)
 
-Arguments: `$0` action: `create | start | review | done | comment | show`; `$1` issue key (required for every action except `create`); `--evidence <file>` (attach the content of an evidence or catalog file as a comment); `--title "<text>"`, `--summary "<text>"` (create), `--message "<text>"` (comment).
+Model: an **Epic** you own (optional) → one **Story** per delivery of this repository (the onboarding first, then one story per change request, named in `.slipway/config.yaml`) → one **Subtask** per unit of work, created and kept current by the skill that does the work (`bootstrap`, `dockerize`, `plan`, `deploy`; `verify` comments on the deploy subtask). The story closes itself when its last subtask is done.
 
-## Preconditions
-1. `.slipway/config.yaml` validates and `options.tracker` is `jira`; read `jira.site_url`, `jira.project_key`, `jira.issue_type`, `jira.transitions`.
-2. The Atlassian Rovo MCP Server (plugin server key `atlassian`, `https://mcp.atlassian.com/v2/mcp`) is connected and authorised. Test with `getAccessibleAtlassianResources`: it returns the `cloudId` every other call needs. If it fails: stop and print exactly "Run `/mcp`, authorise `atlassian`, then re-run this command." Never fall back to `curl` with tokens and never fabricate an issue key.
-3. Confirm the project exists: `listJiraProjects` (or `searchJiraIssuesUsingJql` with `project = <KEY> ORDER BY created DESC` limited to 1). Unknown project → stop with the key you tried.
-
-## Actions
-| Action | Tool calls | Notes |
+Arguments: `$0` action, then:
+| Action | Arguments | Effect |
 |---|---|---|
-| `create` | `createJiraIssue` with `cloudId`, `projectKey`, `issueTypeName` (`jira.issue_type`, default Story), `summary` (default `Onboard <project> to slipway delivery` or `--title`), `description` (structure below) | Then `getJiraIssue` to read back the key, status and description; report the key and URL `<site_url>/browse/<KEY>` |
-| `start` | `listJiraIssueTransitions` → pick the transition whose target status name equals `jira.transitions.start` → `transitionJiraIssue` | If no such transition exists, list the available ones and stop; do not guess |
-| `review` | same with `jira.transitions.review`; add a comment with the CD run URL and deployed URLs when `--evidence` is given | |
-| `done` | same with `jira.transitions.done`; comment with the verification evidence | Refuse if the evidence file reports any REFUTED claim; say so |
-| `comment` | `addOrEditJiraIssueComment` with `--message` and/or the `--evidence` file content (trimmed to the claims table) | |
-| `show` | `getJiraIssue` → key, status, summary, last comment date | |
+| `story create` | `--title "<text>"` (default `Onboard <project> to slipway delivery`), `--epic <KEY>` (default `jira.epic_key`) | creates the Story (parent = epic when given), writes `jira.story_key` into `.slipway/config.yaml` |
+| `story set <KEY>` | | verifies the issue exists in `jira.project_key` and is not a subtask, writes `jira.story_key` |
+| `subtask start "<title>"` | `--message` | finds the subtask `<title>` under the story or creates it, transitions it to `jira.transitions.start`; prints its key |
+| `subtask review <KEY\|"<title>">` | `--message`, `--evidence <file>` | comment + transition to `jira.transitions.review` (a deploy waiting for the human approval) |
+| `subtask done <KEY\|"<title>">` | `--message`, `--evidence <file>` | comment + transition to `jira.transitions.done`; then **auto-close**: if no subtask of the story is left open, transition the story to done with the comment "all subtasks done; closed by slipway" |
+| `comment <KEY>` | `--message`, `--evidence <file>` | comment (evidence trimmed to the claims table and result line) |
+| `show [<KEY>]` | | story (default `jira.story_key`) with status and its subtasks (key, summary, status) |
+| `done <KEY>` | `--evidence` | manual close of a story or subtask; refused when the evidence file reports any REFUTED claim |
+| `sync` | | replays `.slipway/tracking-queue.jsonl` in order (see Availability), popping each entry that succeeds |
+| `create`, `start`, `review` | | kept for compatibility: `create` = `story create`; `start`/`review` act on the story |
 
-## Description structure (create)
+## Preconditions and availability (never a blocker)
+1. `.slipway/config.yaml` validates. `options.tracker: none` → print `tracking: disabled (tracker=none)` and stop successfully; the calling skill continues.
+2. `options.tracker: jira` → read `jira.site_url`, `jira.project_key`, `jira.epic_key`, `jira.story_key`, `jira.issue_type`, `jira.subtask_issue_type`, `jira.transitions`.
+3. The Atlassian Rovo MCP Server (plugin server `atlassian`, `https://mcp.atlassian.com/v2/mcp`) must answer `getAccessibleAtlassianResources` (gives the `cloudId` every other call needs). **If it does not** (not connected, not authorised, headless session without a grant): do not stop the caller. Queue the intended update with `node "${CLAUDE_PLUGIN_ROOT}/scripts/tracking-queue.cjs" add <action> '<json>'` (actions `story_create`, `story_set`, `subtask_start`, `subtask_review`, `subtask_done`, `comment`, `story_done`; args = the same arguments as the action) and print `tracking: queued <action> (<n> pending); run /mcp, authorise atlassian, then /slipway:ticket sync`. Never fall back to `curl` with tokens and never fabricate a key.
+4. Every write is followed by a read-back (`getJiraIssue`) and the read-back is what you report: key, status, summary. A key you did not read back does not exist.
+
+## How each action maps to tools
+- Project and types: `listJiraProjects` (or JQL `project = <KEY>` limited to 1) confirms the project; the project's issue types give the subtask type (`subtask: true`); when `jira.subtask_issue_type` is set, use it, otherwise take the discovered one and say which.
+- Story: `createJiraIssue` with `cloudId`, `projectKey`, `issueTypeName = jira.issue_type`, `summary`, `description` (structure below) and, when an epic is given, the parent (`additional_fields: { "parent": { "key": "<EPIC>" } }`; if the tool has no parent parameter, create first and set the parent with the edit tool, then read it back and confirm `parent.key`). Jira Cloud links stories to epics and subtasks to parents through the same `parent` field in team-managed and company-managed projects (Epic Link is deprecated).
+- Subtask lookup before create: JQL `parent = <STORY> AND summary ~ "\"<title>\""`; exact summary match wins; none → `createJiraIssue` with `issueTypeName = <subtask type>`, `summary = <title>`, parent = story, description = one line "Created by slipway <skill> on <date>; repository <owner>/<repo>". Titles are canonical so lookups stay idempotent: `Bootstrap <project>`, `Dockerize <app>`, `Foundation <env>: plan and apply`, `Deploy <app> <tag> → <env>`.
+- Transitions: list the issue's transitions, pick the one whose target status name equals the configured name (`start`/`review`/`done`); none → list what exists and stop that action (queue nothing; a wrong workflow is a config problem, report it).
+- Comments: `addOrEditJiraIssueComment` with plain text and line breaks; evidence files are trimmed to the `Result:` line, the deployment URL and the claims table.
+- Auto-close check after `subtask done`: JQL `parent = <STORY> AND statusCategory != Done` → 0 issues → transition the story to done and comment; otherwise print how many remain.
+- Writing `jira.story_key`: edit `.slipway/config.yaml` (the only file this skill edits), validate it, then tell the user to commit it through a pull request; do not commit yourself.
+
+## Description structure (story)
 ```
 Objective: <one sentence: what the repo delivers and where>
 Scope: apps <name (kind, stack)>…; options <cloud/compute/registry/runner/versioning/branching/tracker/secret store/base image>
-Acceptance criteria:
-- CI publishes immutable images for every app on <default branch>
-- CD deploys a tag to <env> behind a human approval
-- /slipway:verify confirms every claim for the deployed tag
-Evidence: <links added as comments by review/done>
+Units of work: one subtask each — bootstrap, dockerize per app, foundation per environment, deploy per app/tag/environment (verification recorded on the deploy subtask)
+Acceptance: every subtask done; the last /slipway:verify of each app reports 0 refuted claims
 Generated by slipway <plugin version> on <date>; repository <owner>/<repo>
 ```
-Write the description as plain text with line breaks (the MCP server accepts text; avoid relying on rich formatting). Read the issue back after creating or commenting and quote the key, status and the first line of the description as proof; never claim a key you did not read back.
 
 ## Output
 ```
 ## slipway ticket: <action> <KEY>
-<site_url>/browse/<KEY> — status: <status>
-<what changed: created | transitioned <from> → <to> | comment added>
+<site_url>/browse/<KEY> — <issue type> — status: <status>   (parent: <STORY or EPIC>)
+<what changed: created | transitioned <from> → <to> | comment added | queued (n pending) | tracking disabled>
 ```
 
 ## Do not
-- Do not create duplicate tickets: before `create`, search `project = <KEY> AND summary ~ "<title>" AND statusCategory != Done`; if one exists, report it and stop unless the user asks for a new one.
-- Do not delete issues or change workflows/permissions (the `delete_jira` and `manage_jira` tool groups stay disabled).
-- Do not invent transitions, keys, statuses or evidence.
+- Do not create duplicate stories or subtasks: search before every create (story: `project = <KEY> AND summary ~ "<title>" AND statusCategory != Done`; subtask: by parent and summary).
+- Do not delete issues, change workflows, permissions or sprints (the `delete_jira` and `manage_jira` tool groups stay disabled).
+- Do not invent transitions, keys, statuses or evidence; do not mark anything done without the corresponding output or URL.
+- Do not block or delay delivery work because the tracker is unavailable: queue and continue.

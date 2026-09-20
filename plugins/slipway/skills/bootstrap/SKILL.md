@@ -53,6 +53,7 @@ Load the registry with `node "${CLAUDE_PLUGIN_ROOT}/scripts/options.cjs" --json`
 - Cloud subscription and tenant ids are **optional** in the file; prefer leaving them out of a public repo and relying on `ARM_SUBSCRIPTION_ID`/`AZURE_*` variables. Say so when asking.
 - Pipelines: ask `cd_trigger` (does an app deploy to `<cd_environment>` automatically after a green CI on the default branch? the human approval stays) and `pr_checks` (will the default branch require the per-app checks? then `always-run-gate`). Ask for **shared inputs**: paths outside an app that change its build (shared libraries, root build props). Detected .NET references are shown, not asked. Explain that a shared path triggers and versions every app that lists it, and that a repository-level `version.json` is replaced by one file per app.
 - `versioning=semantic-release` is selectable only for a single-app repository; with several apps say that per-app semantic-release tags are planned and offer `nbgv`.
+- Tracking (group d): `tracker` (`jira` or `none`); with `jira`: the site URL and **project key** (existing project), the **epic** to attach the delivery story to (optional; validate the key exists and is an Epic when given), and the **story**: attach to an existing story key or create `Onboard <project> to slipway delivery`. Explain the model in one sentence: one story per delivery, one subtask per unit of work, the story closes itself when every subtask is done; later change requests get a new story named in `jira.story_key`. Tracking is never a blocker: `none` disables it and an unreachable Jira queues updates.
 
 ## Step 3 — Write and validate the config
 1. Write `.slipway/config.yaml` following `templates/common/slipway/config.example.yaml` exactly in shape (`schema_version: 1`, `project`, `options`, cloud block, `github`, tracker block, `environments`, `pipelines`, `shared_paths`, `apps`, `cursor_mirror`). Each app needs `name`, `path`, `kind`, `stack`, `image_repository` (`<project>/<app>`), and for `api`/`frontend` also `port` and `health_path`; add `upstreams` for a frontend that proxies to an API, `paths` for shared inputs outside the app, `version` for the initial per-app version. App paths must be disjoint (one pipeline pair per app).
@@ -70,7 +71,7 @@ Do not edit generated files by hand afterwards. If something is wrong in a gener
 Delegate to the `verify` sub-agent these claims: `.slipway/config.yaml` validates (`validate-config.cjs` exit 0); `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/rules/precedence.md` exist and contain no `<%`; for every app `.github/workflows/<prefix>-<app>-ci.yml` and `-cd.yml`, `infra/apps/<app>/main.tf` and (nbgv) `<app path>/version.json` exist, and the CI `on.push.paths` equal the `version.json` `pathFilters`; `.claude/settings.json` is valid JSON naming the marketplace and plugin; every `.claude/rules/*.md` other than `precedence.md` has a `paths:` list in its frontmatter; `.gitignore` contains `.slipway/approvals/`, `*.tfvars` and `tfplan*`. Report the verdict table to the user.
 
 ## Step 6 — Ticket
-Unless `--no-ticket`, call `/slipway:ticket create` with title `Onboard <project> to slipway delivery` and a description containing the options table, the app table and the list of generated files. Record the issue key in the summary. If the tracker MCP is not connected, say so and give the exact command to run later; do not fake a key.
+Unless `--no-ticket` or `options.tracker: none`: `/slipway:ticket story create --title "Onboard <project> to slipway delivery"` (or `story set <KEY>` when the user named an existing story), then `/slipway:ticket subtask start "Bootstrap <project>"` and, once Step 5 is green, `/slipway:ticket subtask done "Bootstrap <project>" --message "<options table, app table, generated file count>"`. Record the story and subtask keys in the summary. If the tracker MCP is not connected, the ticket skill queues the updates and tells you; report `tracking: queued`, never a fake key, and continue.
 
 ## Output (always end with this)
 ```
@@ -79,7 +80,7 @@ Options: <dimension=option, …>
 Apps: <name (kind, stack, port, health)>, …
 Generated: <n> files written, <n> skipped, <n> merged  |  Pending option templates: <list or none>
 Verification: <n> confirmed / <n> refuted / <n> unverifiable
-Ticket: <KEY-123 | not created: reason>
+Tracking: story <KEY-123> (epic <KEY-1> | none), subtask <KEY-124> done | queued (n) | disabled
 Next: /slipway:dockerize <first app path>   (then commit, push: each app's CI runs only when its inputs changed)
 ```
 

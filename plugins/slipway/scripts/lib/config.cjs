@@ -191,6 +191,8 @@ function derive(config, options, repoRoot) {
     marketplace: { name: options.distribution.marketplace, repo: options.distribution.repo, plugin: options.distribution.plugin },
     registry_host: registryHost,
     pipelines, shared_paths: sharedPaths, multi_app: apps.length > 1,
+    tracking: { enabled: config.options.tracker !== "none", tracker: config.options.tracker,
+      story_key: config.jira?.story_key || null, epic_key: config.jira?.epic_key || null, subtask_issue_type: config.jira?.subtask_issue_type || "Subtask" },
     apps,
     has_frontend: apps.some(a => a.kind === "frontend"),
     has_dotnet: apps.some(a => a.stack.startsWith("dotnet")),

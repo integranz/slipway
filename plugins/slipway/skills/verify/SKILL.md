@@ -28,7 +28,7 @@ Exit codes: 0 all confirmed, 2 something refuted, 3 only unverifiable items.
 For every REFUTED or UNVERIFIABLE row, delegate to the `verify` sub-agent with the exact claim and the evidence line, asking it to re-check with a different method (for example `az containerapp show … --query properties.configuration.ingress.fqdn` when the artifact was missing, or `docker manifest inspect` for a digest). It may only upgrade a verdict with a positive observation; it never repairs anything. Merge its findings into the table (keep both evidences).
 
 ## Step 3 — Record
-Confirm `.slipway/evidence/<app>/<tag>.md` exists and matches the final table (edit it only to add the sub-agent's second-opinion lines). Do not commit; tell the user the file is ready to commit. If any claim stays REFUTED, say what is broken in one sentence and which skill fixes it (`/slipway:deploy <app>` for a wrong tag, that app's CI for a missing image, `/slipway:plan` for drift, the scaffold for a pipeline-definition mismatch); do not run them.
+Confirm `.slipway/evidence/<app>/<tag>.md` exists and matches the final table (edit it only to add the sub-agent's second-opinion lines). Do not commit; tell the user the file is ready to commit (through a pull request when `main` is protected). Unless `options.tracker: none`: `/slipway:ticket comment "Deploy <app> <tag> → <env>" --evidence .slipway/evidence/<app>/<tag>.md` records the result on the deploy subtask (the ticket skill resolves the title to the key); the parent session does this, never the verify sub-agent. If any claim stays REFUTED, say what is broken in one sentence and which skill fixes it (`/slipway:deploy <app>` for a wrong tag, that app's CI for a missing image, `/slipway:plan` for drift, the scaffold for a pipeline-definition mismatch); do not run them.
 
 ## Output
 ```
@@ -36,7 +36,8 @@ Confirm `.slipway/evidence/<app>/<tag>.md` exists and matches the final table (e
 Result: <n> confirmed / <n> refuted / <n> unverifiable   (evidence: .slipway/evidence/<app>/<tag>.md)
 Refuted: <claim → evidence> | none
 URL: <url>
-Next: /slipway:ticket done <KEY> --evidence .slipway/evidence/<app>/<tag>.md   (or the fix skill named above)
+Tracking: comment on "Deploy <app> <tag> → <env>" | queued | disabled
+Next: <the fix skill named above, or nothing>
 ```
 
 ## Do not

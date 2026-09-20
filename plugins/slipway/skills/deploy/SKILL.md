@@ -30,8 +30,8 @@ Preferred: GitHub MCP `actions_run_trigger` with `method: run_workflow`, `workfl
 3. After approval, keep polling until completion. On failure: `gh run view <id> --log-failed` (or `get_job_logs` with `failed_only`), quote the first failing lines, and stop; do not retry automatically.
 4. On success: download `deploy-evidence-<app>-<env>-<tag>` and read `outputs.json` (`url`, `health_url`, `latest_revision`) and `smoke.txt`.
 
-## Step 4 — Ticket
-Unless `--no-ticket`, `/slipway:ticket review <KEY> --evidence <path>` with the run URL and the deployed URL (if the ticket skill or MCP is unavailable, say so and print the command).
+## Step 4 — Tracking (runs alongside Steps 2–3)
+Unless `--no-ticket` or `options.tracker: none`: after the dispatch, `/slipway:ticket subtask start "Deploy <app> <tag> → <env>" --message "<run URL>"`; when the run waits for the approval, `/slipway:ticket subtask review "Deploy <app> <tag> → <env>" --message "<plan summary line>, waiting for approval on <env>"`; after a successful apply and smoke test, `/slipway:ticket subtask done "Deploy <app> <tag> → <env>" --message "<Apply complete line>; <smoke line>; <url>"`. On failure leave it in review with the failing lines as a comment. An unavailable tracker queues these; continue.
 
 ## Output
 ```

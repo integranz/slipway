@@ -294,6 +294,18 @@ test("semantic-release option (single app) renders its versioning rule", () => {
   assert.match(v, /Conventional Commits/); assert.doesNotMatch(v, /version\.json/); assert.ok(!exists(repo, "apps/web/version.json"));
 });
 
+test("tracker none disables tracking; story and epic keys render into AGENTS.md; malformed keys are rejected", () => {
+  let repo = mkRepo(c => { c.options.tracker = "none"; delete c.jira; });
+  let r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
+  assert.match(read(repo, "AGENTS.md"), /tracker: No tracker/); assert.match(read(repo, "CLAUDE.md"), /Tracking never blocks delivery/);
+  assert.match(read(repo, ".gitignore"), /\.slipway\/tracking-queue\.jsonl/);
+  repo = mkRepo(c => { c.jira.story_key = "DEVOPS-12"; c.jira.epic_key = "DEVOPS-1"; });
+  r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
+  assert.match(read(repo, "AGENTS.md"), /story `DEVOPS-12`, epic `DEVOPS-1`/);
+  repo = mkRepo(c => { c.jira.story_key = "devops-12"; });
+  r = run(["--repo", repo], repo); assert.equal(r.status, 1); assert.match(r.stderr, /story_key/);
+});
+
 test("validate-config reports OK for the example", () => {
   const v = validate(EXAMPLE); assert.equal(v.status, 0, v.stderr); assert.match(v.stdout, /valid \(2 app\(s\)/);
 });

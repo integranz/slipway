@@ -22,7 +22,7 @@ Local development: `claude --plugin-dir ./plugins/slipway`.
 | `plan` | command | `terraform fmt/validate/plan` for one layer (`foundation` or `apps/<app>`); never applies |
 | `deploy` | command | Trigger one app's CD for an immutable tag and monitor it (`deploy <app> <tag> <env>`) |
 | `verify` | command | Falsifiable post-deploy checks; writes `.slipway/evidence/<app>/<tag>.md` |
-| `ticket` | command | Ticket lifecycle in the configured tracker |
+| `ticket` | command | Epic → story → subtask tracking in the configured tracker, with read-backs and an offline queue; never blocks delivery |
 | `delivery-knowledge` | model-invoked only | Reference knowledge per option (compute, versioning, base image, runner, secrets) |
 
 ## Data handling
@@ -37,6 +37,7 @@ The plugin reads `.slipway/config.yaml` and repository files. It sends nothing a
 | `scripts/app-info.cjs [<app>] [--json]` | Derived delivery facts per app: workflow names, tag prefix, build context, `infra/apps/<app>`, state key, inputs |
 | `scripts/verify.cjs <app> <env> <tag>` | Deterministic post-deployment claims for one app; writes `.slipway/evidence/<app>/<tag>.md` |
 | `scripts/approve-apply.sh <planfile>` | Human-only, one-shot, 10-minute approval for one `terraform apply` |
+| `scripts/tracking-queue.cjs add\|list\|pop\|clear` | Offline queue of tracker updates when Jira is unreachable; replayed by `/slipway:ticket sync` |
 
 ## Pipelines per app
 Every app gets `<prefix>-<app>-ci` and `<prefix>-<app>-cd` (thin callers of the shared `_ci.yml`/`_cd.yml`), its own `version.json` with path filters, its own git tags `<app>/v<semver>` and its own Terraform module and state under `infra/apps/<app>`. A change triggers only the apps whose inputs it touches; shared inputs trigger every app that lists them. Options `cd_trigger` (manual or after a green CI) and `pr_checks` (pure path filter or an always-running gate for protected branches) shape the workflows. Design: `docs/PIPELINES-PER-APP.md` in the plugin repository.

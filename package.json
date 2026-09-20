@@ -5,7 +5,7 @@
   "description": "Marketplace and source for the slipway Claude Code plugin. Versioned with semantic-release (Conventional Commits).",
   "scripts": {
     "test": "npm run -s test:unit && npm run -s test:hooks",
-    "test:unit": "node --test plugins/slipway/scripts/lib/render.test.cjs plugins/slipway/scripts/scaffold.test.cjs plugins/slipway/scripts/verify.test.cjs",
+    "test:unit": "node --test plugins/slipway/scripts/lib/render.test.cjs plugins/slipway/scripts/scaffold.test.cjs plugins/slipway/scripts/verify.test.cjs plugins/slipway/scripts/tracking-queue.test.cjs",
     "test:hooks": "bash plugins/slipway/hooks/test-hooks.sh",
     "build:validator": "node scripts/build-validator.cjs",
     "validate:config-example": "node scripts/validate-config-example.mjs",
