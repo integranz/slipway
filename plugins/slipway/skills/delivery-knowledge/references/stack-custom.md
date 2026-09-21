@@ -1,9 +1,12 @@
-# Stack option `custom` — bring your own Dockerfile (any language)
+# Stack option `custom` — an agent-written (or existing) Dockerfile for any language
 
 Added 2026-09-21 so that slipway works on any stack: everything except the image template is already language-agnostic (CI runs `docker build`, Terraform deploys any image, verify probes the health URL, versioning counts commits per path, tracking is per unit of work).
 
+## Who writes the Dockerfile
+Not the end user. When the app has no Dockerfile, the dockerize phase drafts one (hardened base image when `base_image: dhi`, `ARG VERSION`/`ARG COMMIT`, non-root runtime, environment-only configuration), shows it, asks for confirmation and lands it through a pull request; an existing Dockerfile is kept and only checked. The difference from the curated stacks is determinism, not authorship: curated Dockerfiles are rendered templates, identical on every render; a `custom` Dockerfile is authored once per app and owned by the repository afterwards, so re-rendering never overwrites it.
+
 ## Contract the Dockerfile must meet (verified by `/slipway:dockerize` and `/slipway:verify`)
-- Lives at `<app path>/Dockerfile` (`Dockerfile` for an app at the repository root); the scaffold renders nothing for the image and refuses to run without it.
+- Lives at `<app path>/Dockerfile` (`Dockerfile` for an app at the repository root); the scaffold renders nothing for the image and stops with an explicit message while it is missing, so the dockerize phase can write it first.
 - Accepts `ARG VERSION` and `ARG COMMIT` (CI passes both) and stamps `VERSION` where the app can read it (label `org.opencontainers.image.version`; the health endpoint returns the same value, or the frontend bundle contains it).
 - Serves the configured health path on the configured port; runs as a non-root user (`docker inspect -f '{{.Config.User}}'` not empty and not `root`/`0`).
 - Reads all configuration from environment variables: secrets arrive as Container Apps secrets backed by Key Vault (`apps[].secrets`), non-secrets from `apps[].env` (`config_store: env`). No config files at runtime, no `--env-file`.

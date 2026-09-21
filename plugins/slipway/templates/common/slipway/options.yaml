@@ -115,7 +115,7 @@ dimensions:
       react-vite:  { status: implemented, kinds: [frontend],     label: React + Vite static build served by nginx }
       node-ts-api: { status: planned,     kinds: [api, worker],  label: Node.js + TypeScript API, note: "curated hardened Dockerfile planned for 1.1; use stack custom meanwhile" }
       python-api:  { status: later,       kinds: [api, worker],  label: Python API }
-      custom:      { status: implemented, kinds: [api, frontend, worker], label: "Bring your own Dockerfile at the app path (any language). slipway renders no image template and verifies what matters: the build honours VERSION/COMMIT, the health endpoint reports the version, the container runs as non-root; CI, CD, versioning, infra and tracking work unchanged" }
+      custom:      { status: implemented, kinds: [api, frontend, worker], label: "Any language without a curated template: the agent writes the Dockerfile for the app (proposed, confirmed by you, merged through a pull request) or keeps the one the repository already has; slipway then verifies the contract (VERSION/COMMIT build args, health endpoint reporting the version, non-root runtime) and CI, CD, versioning, infra and tracking work unchanged" }
 
   config_store:
     question: Where do non-secret runtime settings live? (secrets always go to the secret store as Key Vault references)
