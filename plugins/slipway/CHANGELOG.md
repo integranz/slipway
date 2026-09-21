@@ -1,3 +1,9 @@
+## [0.16.0](https://github.com/integranz/slipway/compare/v0.15.2...v0.16.0) (2026-09-21)
+
+### Features
+
+* **stacks:** any stack, any structure — custom Dockerfile stack, apps at the repository root, per-app CI service containers ([3b9dfa2](https://github.com/integranz/slipway/commit/3b9dfa27c971c02f5573a6ac203a6cea8cec88d7))
+
 ## [0.15.2](https://github.com/integranz/slipway/compare/v0.15.1...v0.15.2) (2026-09-20)
 
 ### Bug Fixes
