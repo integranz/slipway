@@ -42,31 +42,62 @@ jobs:
           if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename' > changed.txt
           python3 - <<'PY'
-          import os
+          import os,fnmatch
           paths=[p.strip().rstrip("/") for p in os.environ["APP_PATHS"].splitlines() if p.strip()]
+          inc=[p for p in paths if not p.startswith("!")]; exc=[p[1:] for p in paths if p.startswith("!")]
+          def m(f,p): return fnmatch.fnmatch(f,p) if "*" in p else (f==p or f.startswith(p+"/"))
           changed=[l.strip() for l in open("changed.txt") if l.strip()]
-          hit=[f for f in changed if any(f==p or f.startswith(p+"/") for p in paths)]
+          hit=[f for f in changed if any(m(f,p) for p in inc) and not any(m(f,p) for p in exc)]
           with open(os.environ["GITHUB_OUTPUT"],"a") as out: out.write(f"run={'true' if hit else 'false'}\n")
           with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as s:
               s.write(f"### <% app.name %>: {'changed' if hit else 'untouched'} by this pull request ({len(changed)} changed files, {len(hit)} among this app's inputs)\n")
               for f in hit[:20]: s.write(f"- `{f}`\n")
           PY
-
-  ci:
-    name: <% app.name %>
-    needs: changes
+<%/eq%>
+<%#if app.test_command%>  test:
+    # This app's tests, with its own service containers, before the shared stages build the image.
+    name: <% app.name %> test
+<%#eq options.pr_checks "always-run-gate"%>    needs: changes
     if: needs.changes.outputs.run == 'true'
-<%else%>  ci:
+<%/eq%>    runs-on: ubuntu-latest
+<%#if app.test_services%>    services:
+<%#each app.test_services%>      <% name %>:
+        image: <% image %>
+<%#if env_list%>        env:
+<%#each env_list%>          <% name %>: "<% value %>"
+<%/each%><%/if%><%#if port%>        ports:
+          - <% port %>:<% port %>
+<%/if%><%#if health_cmd%>        options: --health-cmd "<% health_cmd %>" --health-interval 5s --health-timeout 5s --health-retries 12
+<%/if%><%/each%><%/if%><%#if app.test_env_list%>    env:
+<%#each app.test_env_list%>      <% name %>: "<% value %>"
+<%/each%><%/if%>    steps:
+      - uses: actions/checkout@v7
+<%#if app.is_dotnet%>      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+<%/if%><%#if app.is_node%>      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: <% app.path %>/package-lock.json
+      - name: install <% app.name %> dependencies
+        run: npm ci --prefix "<% app.path %>" --no-audit --no-fund
+<%/if%>      - name: test <% app.name %>
+        run: <% app.test_command %>
+
+<%/if%>  ci:
     name: <% app.name %>
-<%/eq%>    uses: ./.github/workflows/_ci.yml
+<%#eq options.pr_checks "always-run-gate"%>    needs: [changes<%#if app.test_command%>, test<%/if%>]
+    if: needs.changes.outputs.run == 'true'
+<%else%><%#if app.test_command%>    needs: [test]
+<%/if%><%/eq%>    uses: ./.github/workflows/_ci.yml
     with:
       app: <% app.name %>
       app_path: <% app.path %>
       context: <% app.build.context %>
       dockerfile: <% app.build.dockerfile %>
       image_repository: <% app.image_repository %>
-<%#if app.test_command%>      test_command: "<% app.test_command %>"
-<%/if%>      is_dotnet: <% app.is_dotnet %>
+      is_dotnet: <% app.is_dotnet %>
       is_node: <% app.is_node %>
       tag_prefix: <% app.tag_prefix %>
     secrets: inherit
@@ -75,13 +106,14 @@ jobs:
     # Always produces a check named `<% app.name %> ci`, whether the app was built or skipped: reusable-workflow jobs emit
     # no nested checks when the caller job is skipped, so a branch rule must require this check (and `<% app.name %> changes`).
     name: <% app.name %> ci
-    needs: [<%#eq options.pr_checks "always-run-gate"%>changes, <%/eq%>ci]
+    needs: [<%#eq options.pr_checks "always-run-gate"%>changes, <%/eq%><%#if app.test_command%>test, <%/if%>ci]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo "ci job result: ${{ needs.ci.result }}"
-          case "${{ needs.ci.result }}" in
+          echo "test: ${{ <%#if app.test_command%>needs.test.result<%else%>'not configured'<%/if%> }} | ci: ${{ needs.ci.result }}"
+<%#if app.test_command%>          case "${{ needs.test.result }}" in failure|cancelled) echo "::error::<% app.name %>: tests ${{ needs.test.result }}"; exit 1;; esac
+<%/if%>          case "${{ needs.ci.result }}" in
             success) echo "<% app.name %>: built and tested";;
             skipped) echo "<% app.name %>: untouched by this change, nothing to build";;
             *) echo "::error::<% app.name %>: CI ${{ needs.ci.result }}"; exit 1;;

@@ -157,7 +157,7 @@ test("planned or later options are rejected before anything is written", () => {
     [c => { c.apps[1].upstreams = ["nope"]; }, /'nope' is not an app/],
     [c => { c.apps[0].kind = "frontend"; }, /supports kinds \[api, worker\]/],
     [c => { c.options.versioning = "semantic-release"; }, /semantic-release with several apps is 'planned'/],
-    [c => { c.apps[1].paths = ["packages/ui"]; }, /implemented for dotnet8-api only/],
+    [c => { c.apps[1].paths = ["packages/ui"]; }, /implemented for dotnet8-api and custom/],
     [c => { c.options.cd_trigger = "nightly"; }, /cd_trigger/],
     [c => { c.apps[1].path = "apps/api/web"; }, /app paths must be disjoint/],
   ]) {
@@ -174,7 +174,7 @@ test("optional dimensions default to manual CD and path-filtered PR checks", () 
   const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
   assert.match(read(repo, ".slipway/SETUP.md"), /on the workflow run page/, "default cd_approval is github-ui");
   const ci = yaml.load(read(repo, ".github/workflows/slipway-demo-web-ci.yml")), cd = yaml.load(read(repo, ".github/workflows/slipway-demo-web-cd.yml"));
-  assert.deepEqual(Object.keys(ci.jobs), ["ci", "result"], "no gate job in path-filtered mode"); assert.deepEqual(ci.jobs.result.needs, ["ci"]); assert.ok(Array.isArray(ci.on.pull_request.paths), "pull_request must be path-filtered");
+  assert.deepEqual(Object.keys(ci.jobs), ["test", "ci", "result"], "no gate job in path-filtered mode"); assert.deepEqual(ci.jobs.result.needs, ["test", "ci"]); assert.deepEqual(ci.jobs.ci.needs, ["test"]); assert.ok(Array.isArray(ci.on.pull_request.paths), "pull_request must be path-filtered");
   assert.equal(cd.on.workflow_run, undefined, "manual CD has no workflow_run trigger");
   assert.match(read(repo, ".claude/rules/pipelines.md"), /do \*\*not\*\* require per-app checks/);
   assert.match(read(repo, ".claude/rules/pipelines.md"), /CD is started only by/);
@@ -225,18 +225,20 @@ test("per-app CI workflows: thin callers with path filters, gate job, shared _ci
     const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
     const ci = read(repo, ".github/workflows/_ci.yml"); assert.doesNotMatch(ci, /<%/, "unrendered placeholder in _ci.yml");
     const doc = yaml.load(ci); assert.equal(doc.name, "_ci"); assert.ok(doc.on.workflow_call, "_ci.yml must be reusable");
-    assert.deepEqual(Object.keys(doc.jobs), ["version", "test", "image", "release"]);
+    assert.deepEqual(Object.keys(doc.jobs), ["version", "image", "release"], "tests moved to the per-app callers"); assert.deepEqual(doc.jobs.image.needs, ["version"]); assert.ok(!ci.includes("test_command"), "_ci.yml carries no test inputs any more");
     for (const s of must) assert.ok(ci.includes(s), `${versioning}: _ci.yml missing ${s}`);
     for (const s of mustNot) assert.ok(!ci.includes(s), `${versioning}: _ci.yml must not contain ${s}`);
     for (const s of ["registry: dhi.io", "azure/login@v3", "az acr login --name acradlcdemo", "provenance: false", "acradlcdemo.azurecr.io", "Refuse to overwrite an existing tag", "${{ inputs.image_repository }}", "file: ${{ inputs.dockerfile }}", "release-manifest-${{ inputs.app }}-"]) assert.ok(ci.includes(s), `_ci.yml missing ${s}`);
     assert.doesNotMatch(ci, /:latest/, "no mutable tags in _ci.yml");
     // per-app callers
     const web = yaml.load(read(repo, ".github/workflows/slipway-demo-web-ci.yml"));
-    assert.equal(web.name, "slipway-demo-web-ci"); assert.deepEqual(Object.keys(web.jobs), ["changes", "ci", "result"]);
-    assert.equal(web.jobs.result.name, "web ci"); assert.equal(web.jobs.result.if, "always()"); assert.deepEqual(web.jobs.result.needs, ["changes", "ci"]);
+    assert.equal(web.name, "slipway-demo-web-ci"); assert.deepEqual(Object.keys(web.jobs), ["changes", "test", "ci", "result"]);
+    assert.equal(web.jobs.test.name, "web test"); assert.equal(web.jobs.test.needs, "changes"); assert.equal(web.jobs.test.if, "needs.changes.outputs.run == 'true'");
+    assert.ok(web.jobs.test.steps.some(s => s.uses === "actions/setup-node@v7") && web.jobs.test.steps.some(s => s.run === "npm --prefix apps/web test"), "web test job runs the test command after node setup");
+    assert.equal(web.jobs.result.name, "web ci"); assert.equal(web.jobs.result.if, "always()"); assert.deepEqual(web.jobs.result.needs, ["changes", "test", "ci"]);
     assert.equal(web.jobs.changes.name, "web changes"); assert.equal(web.jobs.ci.name, "web", "check names must be unique per app (web / test, web / image)");
-    assert.equal(web.jobs.ci.uses, "./.github/workflows/_ci.yml"); assert.equal(web.jobs.ci.secrets, "inherit"); assert.equal(web.jobs.ci.if, "needs.changes.outputs.run == 'true'");
-    assert.deepEqual(web.jobs.ci.with, { app: "web", app_path: "apps/web", context: "apps/web", dockerfile: "apps/web/Dockerfile", image_repository: "adlc-demo/web", test_command: "npm --prefix apps/web test", is_dotnet: false, is_node: true, tag_prefix: "web/v" });
+    assert.equal(web.jobs.ci.uses, "./.github/workflows/_ci.yml"); assert.equal(web.jobs.ci.secrets, "inherit"); assert.equal(web.jobs.ci.if, "needs.changes.outputs.run == 'true'"); assert.deepEqual(web.jobs.ci.needs, ["changes", "test"]);
+    assert.deepEqual(web.jobs.ci.with, { app: "web", app_path: "apps/web", context: "apps/web", dockerfile: "apps/web/Dockerfile", image_repository: "adlc-demo/web", is_dotnet: false, is_node: true, tag_prefix: "web/v" });
     assert.equal(web.on.pull_request.paths, undefined, "gate mode: pull requests are not path-filtered");
     assert.deepEqual(web.on.push.paths, ["apps/web/**", ".github/workflows/slipway-demo-web-ci.yml", ".github/workflows/slipway-demo-web-cd.yml", ".github/workflows/_ci.yml", ".github/workflows/_cd.yml", "infra/apps/web/**"]);
     const gatePaths = web.jobs.changes.steps[0].env.APP_PATHS.trim().split("\n").map(s => s.trim());
@@ -310,6 +312,55 @@ test("tracker none disables tracking; story and epic keys render into AGENTS.md;
   assert.match(read(repo, "AGENTS.md"), /story `DEVOPS-12`, epic `DEVOPS-1`/);
   repo = mkRepo(c => { c.jira.story_key = "devops-12"; });
   r = run(["--repo", repo], repo); assert.equal(r.status, 1); assert.match(r.stderr, /story_key/);
+});
+
+function mkRootRepo(stack, extra) {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "slipway-root-")); execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  const cfg = yaml.load(fs.readFileSync(EXAMPLE, "utf8"));
+  cfg.project = { name: "taskflow" }; cfg.pipelines = { name_prefix: "taskflow" }; cfg.github.repo = "taskflow"; cfg.azure.resource_group = "rg-taskflow-dev"; cfg.azure.acr_name = "acrtaskflow"; cfg.azure.key_vault_name = "kv-taskflow-dev"; cfg.azure.identity_name = "id-taskflow-dev";
+  cfg.apps = [{ name: "api", path: ".", kind: "api", stack, port: 3000, health_path: "/health", test_command: stack === "custom" ? "npm test" : "dotnet test", image_repository: "taskflow/api", version: "0.1",
+    secrets: [{ name: "database-url", env: "DATABASE_URL" }], env: { PORT: "3000" }, ...(extra || {}) }];
+  fs.mkdirSync(path.join(repo, ".slipway")); fs.writeFileSync(path.join(repo, ".slipway", "config.yaml"), yaml.dump(cfg));
+  if (stack === "custom") { fs.writeFileSync(path.join(repo, "package.json"), '{"name":"taskflow"}'); }
+  else { fs.mkdirSync(path.join(repo, "src/Api"), { recursive: true }); fs.writeFileSync(path.join(repo, "src/Api/Api.csproj"), "<Project/>"); }
+  return repo;
+}
+
+test("stack custom at the repository root: own Dockerfile kept, root filters, service containers in the app's CI", () => {
+  const repo = mkRootRepo("custom", { test_services: [{ name: "postgres", image: "postgres:16-alpine", port: 5432, env: { POSTGRES_USER: "taskflow", POSTGRES_PASSWORD: "taskflow", POSTGRES_DB: "taskflow_test" }, health_cmd: "pg_isready -U taskflow" }], test_env: { DATABASE_URL: "postgres://taskflow:taskflow@localhost:5432/taskflow_test" } });
+  fs.writeFileSync(path.join(repo, "Dockerfile"), "FROM dhi.io/node:22\n");
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.doesNotMatch(r.stdout, /legacy/, "a root app owns version.json: not legacy");
+  assert.equal(read(repo, "Dockerfile"), "FROM dhi.io/node:22\n", "the user's Dockerfile is never touched");
+  assert.deepEqual(JSON.parse(read(repo, "version.json")).pathFilters, [".", ":!/.slipway", ":!**/*.md"]);
+  const ci = yaml.load(read(repo, ".github/workflows/taskflow-api-ci.yml"));
+  assert.equal(ci.name, "taskflow-api-ci"); assert.deepEqual(ci.on.push.paths, ["**", "!.slipway/**", "!**/*.md"]);
+  assert.deepEqual(Object.keys(ci.jobs), ["changes", "test", "ci", "result"]);
+  assert.equal(ci.jobs.test.services.postgres.image, "postgres:16-alpine"); assert.deepEqual(ci.jobs.test.services.postgres.ports, ["5432:5432"]); assert.match(ci.jobs.test.services.postgres.options, /pg_isready -U taskflow/);
+  assert.equal(ci.jobs.test.env.DATABASE_URL, "postgres://taskflow:taskflow@localhost:5432/taskflow_test"); assert.ok(ci.jobs.test.steps.some(s => s.uses === "actions/setup-node@v7"), "package.json at the root makes a custom app a node app for setup");
+  assert.deepEqual(ci.jobs.ci.with, { app: "api", app_path: ".", context: ".", dockerfile: "Dockerfile", image_repository: "taskflow/api", is_dotnet: false, is_node: true, tag_prefix: "api/v" });
+  assert.equal(yaml.load(read(repo, ".github/workflows/taskflow-api-cd.yml")).name, "taskflow-api-cd");
+  assert.match(read(repo, "infra/apps/api/versions.tf"), /key\s+= "taskflow\/apps\/api\/dev\.tfstate"/); assert.match(read(repo, "infra/apps/api/main.tf"), /secrets\/database-url/); assert.match(read(repo, "infra/apps/api/main.tf"), /name\s+= "PORT"/);
+  assert.match(read(repo, "compose.yaml"), /context: \.\n\s+dockerfile: Dockerfile/); assert.match(read(repo, ".dockerignore"), /^\.git$/m);
+  assert.ok(!exists(repo, "apps"), "no app directory is created for a root app");
+});
+
+test("stack custom without a Dockerfile is refused before anything is written", () => {
+  const repo = mkRootRepo("custom"); const r = run(["--repo", repo], repo);
+  assert.equal(r.status, 1); assert.match(r.stderr, /needs a Dockerfile at Dockerfile/); assert.ok(!exists(repo, "AGENTS.md"));
+});
+
+test("dotnet app at the repository root: the stack ignore file shadows the common one and carries repository exclusions", () => {
+  const repo = mkRootRepo("dotnet8-api"); const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /shadow\s+\.dockerignore/);
+  const di = read(repo, ".dockerignore"); assert.match(di, /stack dotnet8-api/); assert.match(di, /^\.git$/m); assert.match(di, /^infra$/m); assert.match(di, /^tests\/$/m);
+  const df = read(repo, "Dockerfile"); assert.match(df, /COPY src\/Api\/\*\.csproj src\/Api\//); assert.match(df, /-f Dockerfile \./);
+  assert.deepEqual(JSON.parse(read(repo, "version.json")).pathFilters, [".", ":!/.slipway", ":!**/*.md"]);
+});
+
+test("a root app must be the only app", () => {
+  const repo = mkRepo(c => { c.apps[1].path = "."; c.apps[1].stack = "custom"; }); fs.writeFileSync(path.join(repo, "Dockerfile"), "FROM x\n");
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 1); assert.match(r.stderr, /must be the only app/);
 });
 
 test("validate-config reports OK for the example", () => {

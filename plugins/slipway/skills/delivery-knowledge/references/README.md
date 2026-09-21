@@ -11,3 +11,4 @@ One file per implemented option or concern:
 - `versioning-semantic-release.md`
 - `compute-aca.md`
 - `tracker-jira.md` — epic → story → subtask model, Jira parent-field facts, Rovo MCP tools, offline queue
+- `stack-custom.md` — bring-your-own Dockerfile contract, root-path apps, CI service containers, what is planned for 1.1

@@ -6,7 +6,7 @@ const validateSchema = require("./validate-config.generated.cjs");
 const PLUGIN_ROOT = path.resolve(__dirname, "..", "..");
 const OPTIONS_PATH = path.join(PLUGIN_ROOT, "templates", "common", "slipway", "options.yaml");
 // Optional dimensions and the value they take when the config omits them.
-const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui" };
+const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui", config_store: "env", database: "none" };
 
 function loadYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
 function loadOptions() { return loadYaml(OPTIONS_PATH); }
@@ -59,9 +59,10 @@ function checkConfig(config, options) {
   for (const a of config.apps) for (const b of config.apps) {
     if (a !== b && (normPath(b.path) === normPath(a.path) || normPath(b.path).startsWith(normPath(a.path) + "/"))) errors.push(`apps: path of '${b.name}' (${b.path}) lies inside the path of '${a.name}' (${a.path}); app paths must be disjoint`);
   }
-  for (const app of config.apps) if ((app.paths || []).length && !String(app.stack).startsWith("dotnet")) {
-    errors.push(`apps.${app.name}.paths: shared inputs outside the app path are implemented for dotnet8-api only (the ${app.stack} Dockerfile builds from the app path; JS shared packages are planned)`);
+  for (const app of config.apps) if ((app.paths || []).length && !String(app.stack).startsWith("dotnet") && app.stack !== "custom") {
+    errors.push(`apps.${app.name}.paths: shared inputs outside the app path are implemented for dotnet8-api and custom (your own Dockerfile copies them); the ${app.stack} Dockerfile builds from the app path (JS shared packages are planned)`);
   }
+  for (const app of config.apps) if (normPath(app.path) === "." && config.apps.length > 1) errors.push(`apps.${app.name}: an app at the repository root ('.') must be the only app`);
   if (config.options.versioning === "semantic-release" && config.apps.length > 1) {
     errors.push("options.versioning=semantic-release with several apps is 'planned': per-app tags in a monorepo are not implemented yet. Use nbgv, or keep a single app.");
   }
@@ -118,6 +119,11 @@ function buildDefaults(app, repoRoot) {
   }
   if (app.stack === "react-vite" || app.stack === "node-ts-api") { b.node_version = b.node_version || "22"; b.dist_dir = b.dist_dir || "dist"; }
   if (app.stack === "react-vite") b.nginx_version = b.nginx_version || "1.29";
+  if (app.stack === "custom" && repoRoot) {
+    // Bring-your-own Dockerfile: slipway renders nothing for the image; the file must exist at the app path.
+    const df = path.join(repoRoot, normPath(app.path) === "." ? "" : normPath(app.path), "Dockerfile");
+    if (!fs.existsSync(df)) b.error = `apps.${app.name}: stack custom needs a Dockerfile at ${normPath(app.path) === "." ? "" : normPath(app.path) + "/"}Dockerfile (bring your own; slipway verifies VERSION/COMMIT build args, the health endpoint and a non-root runtime)`;
+  }
   return b;
 }
 
@@ -142,7 +148,9 @@ function derive(config, options, repoRoot) {
   // Upstream reachability differs per compute: on Container Apps every app is reachable as http://<app-name> (port 80,
   // through the environment proxy); in local docker compose the service name resolves and the container port is used.
   const apps = config.apps.map((a, i) => {
-    const appPath = normPath(a.path);
+    const appPath = normPath(a.path); const atRoot = appPath === "."; const appDir = atRoot ? "" : appPath + "/";
+    const hasFile = (rel) => { try { return !!repoRoot && fs.existsSync(path.join(repoRoot, rel)); } catch { return false; } };
+    const hasCsproj = () => { try { return !!repoRoot && fs.readdirSync(path.join(repoRoot, appPath), { withFileTypes: true }).some(e => e.name.endsWith(".csproj")); } catch { return false; } };
     const upstreams = (a.upstreams || []).map(n => ({ name: n, port: byName[n]?.port || 8080, path_prefix: "/api/",
       url_cloud: config.options.compute === "aca" ? `http://${n}` : `http://${n}:${byName[n]?.port || 8080}`,
       url_local: `http://${n}:${byName[n]?.port || 8080}` }));
@@ -151,11 +159,12 @@ function derive(config, options, repoRoot) {
     const refs = a.stack.startsWith("dotnet") && build.project && repoRoot ? dotnetRefs(repoRoot, `${appPath}/${build.project}`) : [];
     const refDirs = uniq(refs.map(r => path.posix.dirname(r)));
     const extraPaths = uniq([...(a.paths || []).map(normPath), ...refDirs.filter(d => !inside(d, appPath))]);
-    const contextRoot = extraPaths.length > 0; // the Docker build context must contain every input
-    build.context = contextRoot ? "." : appPath;
-    build.dockerfile = `${appPath}/Dockerfile`;
+    const contextRoot = extraPaths.length > 0 && !atRoot; // the Docker build context must contain every input
+    build.context = contextRoot || atRoot ? "." : appPath;
+    build.dockerfile = `${appDir}Dockerfile`;
     build.dockerfile_from_context = contextRoot ? `${appPath}/Dockerfile` : "Dockerfile";
     build.context_root = contextRoot;
+    build.context_is_repo_root = contextRoot || atRoot; // the ignore file must then carry the repository-level exclusions
     build.src_prefix = contextRoot ? `${appPath}/` : ""; // prefix of app-relative paths when copied from the context
     build.copy_dirs = contextRoot ? [appPath, ...extraPaths] : ["."];
     build.dep_project_dirs = refDirs.map(d => contextRoot ? d : path.posix.relative(appPath, d) || ".");
@@ -165,12 +174,18 @@ function derive(config, options, repoRoot) {
     }
     const workflowBase = `${namePrefix}-${a.name}`, workflowCi = `${workflowBase}-ci`, workflowCd = `${workflowBase}-cd`;
     const infraDir = `infra/apps/${a.name}`;
-    const pipelinePaths = uniq([appPath, ...extraPaths, ...sharedPaths,
+    // An app at the repository root owns everything except records that never change its image (evidence, docs).
+    const ROOT_EXCLUDES = [".slipway", "**/*.md"];
+    const pipelinePaths = atRoot ? ["**", ...ROOT_EXCLUDES.map(e => `!${e}`)] : uniq([appPath, ...extraPaths, ...sharedPaths,
       `.github/workflows/${workflowCi}.yml`, `.github/workflows/${workflowCd}.yml`, `.github/workflows/_ci.yml`, `.github/workflows/_cd.yml`,
       infraDir, ...(contextRoot ? [".dockerignore"] : [])]);
-    const triggerPaths = pipelinePaths.map(p => isFilePath(repoRoot, p) ? p : `${p}/**`);
+    const triggerPaths = atRoot ? ["**", "!.slipway/**", "!**/*.md"] : pipelinePaths.map(p => isFilePath(repoRoot, p) ? p : `${p}/**`);
+    const pathFilters = atRoot ? [".", ":!/.slipway", ":!**/*.md"] : pipelinePaths.map(p => `/${p}`);
     return { ...a, path: appPath, image: `${registryHost}/${a.image_repository}`, image_local: `${config.project.name}/${a.name}`, local_port: 8080 + i,
-      is_node: a.stack === "react-vite" || a.stack === "node-ts-api", is_dotnet: a.stack.startsWith("dotnet"),
+      is_node: a.stack === "react-vite" || a.stack === "node-ts-api" || (a.stack === "custom" && hasFile(`${appDir}package.json`)),
+      is_dotnet: a.stack.startsWith("dotnet") || (a.stack === "custom" && hasCsproj()), is_custom: a.stack === "custom", at_root: atRoot,
+      test_services: (a.test_services || []).map(s => ({ ...s, env_list: Object.entries(s.env || {}).map(([k, v]) => ({ name: k, value: v })) })),
+      test_env_list: Object.entries(a.test_env || {}).map(([k, v]) => ({ name: k, value: v })),
       external: a.kind !== "worker", has_ingress: a.kind !== "worker",
       secrets: a.secrets || [], env_list: Object.entries(a.env || {}).map(([k, v]) => ({ name: k, value: v })),
       cpu: (a.resources && a.resources.cpu) || 0.25, memory: (a.resources && a.resources.memory) || "0.5Gi",
@@ -180,8 +195,8 @@ function derive(config, options, repoRoot) {
       // per-app delivery
       workflow_base: workflowBase, workflow_ci: workflowCi, workflow_cd: workflowCd,
       extra_paths: extraPaths, pipeline_paths: pipelinePaths, trigger_paths: triggerPaths,
-      path_filters: pipelinePaths.map(p => `/${p}`),
-      version_file: `${appPath}/version.json`, initial_version: a.version || "0.1",
+      path_filters: pathFilters,
+      version_file: `${appDir}version.json`, initial_version: a.version || "0.1",
       tag_prefix: `${a.name}/v`, tag_name_format: `${a.name}/v{version}`, release_branch_format: `release/${a.name}-v{version}`,
       infra_dir: infraDir, state_key: `${config.project.name}/apps/${a.name}/${env}.tfstate`, evidence_dir: `.slipway/evidence/${a.name}` };
   });
@@ -195,8 +210,9 @@ function derive(config, options, repoRoot) {
       story_key: config.jira?.story_key || null, epic_key: config.jira?.epic_key || null, subtask_issue_type: config.jira?.subtask_issue_type || "Subtask" },
     apps,
     has_frontend: apps.some(a => a.kind === "frontend"),
-    has_dotnet: apps.some(a => a.stack.startsWith("dotnet")),
-    has_node: apps.some(a => a.stack === "react-vite" || a.stack === "node-ts-api"),
+    has_dotnet: apps.some(a => a.is_dotnet),
+    has_node: apps.some(a => a.is_node),
+    has_root_app: apps.some(a => a.at_root),
     has_worker: apps.some(a => a.kind === "worker"),
     option_labels: Object.fromEntries(Object.entries(config.options).map(([dim, v]) => [dim, options.dimensions[dim].options[v]?.label || v])),
     option_rows: Object.entries(config.options).map(([dim, v]) => ({ dimension: dim, option: v, label: options.dimensions[dim].options[v]?.label || v, status: options.dimensions[dim].options[v]?.status || "unknown" })),

@@ -17,7 +17,8 @@ Arguments: `$0` = app path or app name from `.slipway/config.yaml` (e.g. `apps/a
 ## Step 0 — Tracking
 Unless `--no-ticket` or `options.tracker: none`: `/slipway:ticket subtask start "Dockerize <app>"`. Unavailable tracker → it queues; continue.
 
-## Step 1 — Render the Dockerfile from the stack template
+## Step 1 — Render the Dockerfile from the stack template (or check yours: stack `custom`)
+For `stack: custom` nothing is rendered for the image: the Dockerfile at `<app path>/Dockerfile` is yours. If it is missing, propose one (execute sub-agent; hardened base image when `base_image: dhi`, `ARG VERSION`/`ARG COMMIT`, non-root runtime, environment-only configuration) and ask with `AskUserQuestion` before writing it; the contract is in `delivery-knowledge/references/stack-custom.md`. For other stacks:
 `node "${CLAUDE_PLUGIN_ROOT}/scripts/scaffold.cjs" --repo . --app <name>` (add `--force` only if asked). This writes `<app path>/Dockerfile`, `.dockerignore` (and `Dockerfile.dockerignore` for .NET apps), for frontends `nginx.conf` + `nginx.local.conf`, plus the app's own workflows, `infra/apps/<app>` module and `version.json` when they are missing. Read the build context with `node "${CLAUDE_PLUGIN_ROOT}/scripts/app-info.cjs" <name>`: it is the app path, or the repository root when the app builds inputs outside its path (declared `paths` or detected .NET `ProjectReference`s). If the scaffold reports a config error (for example no `.csproj` detected), stop and tell the user which `build.*` key to set in `.slipway/config.yaml`. Never hand-edit the Dockerfile: fix the template or the config.
 
 ## Step 2 — Build (execute sub-agent)
@@ -59,6 +60,6 @@ Next: commit the generated files; CI will push <registry>/<repo>:<version> on th
 
 ## Do not
 - Do not push images, log in to registries with stored credentials, or use `latest`/branch tags.
-- Do not edit the generated Dockerfile, nginx config, `.dockerignore` or `Dockerfile.dockerignore` by hand; change the template in the plugin or `build.*` / `paths` in the config.
+- Do not edit a generated Dockerfile, nginx config, `.dockerignore` or `Dockerfile.dockerignore` by hand; change the template in the plugin or `build.*` / `paths` in the config. A `custom` Dockerfile is the user's file: propose changes, never apply them silently.
 - Do not add a shell, package manager or debugging tools to the runtime stage to make a check pass.
 - Do not leave test containers running.

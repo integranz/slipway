@@ -113,10 +113,10 @@ const tf = (dir, tfArgs, timeout) => sh("terraform", [`-chdir=${dir}`, ...tfArgs
     if (!fs.existsSync(ciFile) || !fs.existsSync(vFile)) record(`${app.name}: trigger paths and version.json pathFilters agree`, "REFUTED", `missing ${!fs.existsSync(ciFile) ? ciFile : vFile}`);
     else {
       try {
-        const ci = yaml.load(fs.readFileSync(ciFile, "utf8")); const trig = (ci.on?.push?.paths || []).map(p => p.replace(/\/\*\*$/, ""));
-        const filt = (JSON.parse(fs.readFileSync(vFile, "utf8")).pathFilters || []).map(p => p.replace(/^\//, ""));
-        const same = JSON.stringify(trig) === JSON.stringify(filt) && JSON.stringify(trig) === JSON.stringify(app.pipeline_paths);
-        record(`${app.name}: trigger paths, version.json pathFilters and .slipway/config.yaml agree`, same ? "CONFIRMED" : "REFUTED", same ? `${trig.length} paths: ${trig.join(", ")}` : `push.paths=${JSON.stringify(trig)} pathFilters=${JSON.stringify(filt)} config=${JSON.stringify(app.pipeline_paths)} (re-scaffold)`);
+        const ci = yaml.load(fs.readFileSync(ciFile, "utf8")); const trig = ci.on?.push?.paths || [];
+        const filt = JSON.parse(fs.readFileSync(vFile, "utf8")).pathFilters || [];
+        const same = JSON.stringify(trig) === JSON.stringify(app.trigger_paths) && JSON.stringify(filt) === JSON.stringify(app.path_filters);
+        record(`${app.name}: trigger paths, version.json pathFilters and .slipway/config.yaml agree`, same ? "CONFIRMED" : "REFUTED", same ? `${trig.length} trigger paths: ${trig.join(", ")}` : `push.paths=${JSON.stringify(trig)} expected=${JSON.stringify(app.trigger_paths)}; pathFilters=${JSON.stringify(filt)} expected=${JSON.stringify(app.path_filters)} (re-scaffold)`);
       } catch (e) { record(`${app.name}: trigger paths and version.json pathFilters agree`, "UNVERIFIABLE", e.message); }
     }
   }

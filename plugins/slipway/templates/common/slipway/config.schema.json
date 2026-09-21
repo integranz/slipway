@@ -134,6 +134,20 @@
             "in-session"
           ],
           "description": "Optional (default github-ui). in-session lets /slipway:deploy approve the pending deployment through the GitHub API after the human confirms the plan, recorded under the human's account."
+        },
+        "config_store": {
+          "enum": [
+            "env",
+            "app-configuration"
+          ],
+          "description": "Optional (default env)."
+        },
+        "database": {
+          "enum": [
+            "none",
+            "azure-postgresql-flexible"
+          ],
+          "description": "Optional (default none)."
         }
       }
     },
@@ -337,7 +351,8 @@
               "dotnet8-api",
               "react-vite",
               "node-ts-api",
-              "python-api"
+              "python-api",
+              "custom"
             ]
           },
           "port": {
@@ -478,6 +493,56 @@
             "type": "string",
             "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
             "description": "nbgv: initial 'version' written to <app path>/version.json the first time it is generated (default 0.1). Never rewritten afterwards."
+          },
+          "test_services": {
+            "type": "array",
+            "description": "Service containers started next to this app's tests in CI (GitHub Actions `services`), for example a PostgreSQL for integration tests.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "image"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                },
+                "image": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535,
+                  "description": "Container port published on the same host port"
+                },
+                "env": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "propertyNames": {
+                    "pattern": "^[A-Z][A-Z0-9_]*$"
+                  }
+                },
+                "health_cmd": {
+                  "type": "string",
+                  "description": "Command for the container health check, e.g. pg_isready -U taskflow"
+                }
+              }
+            }
+          },
+          "test_env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "pattern": "^[A-Z][A-Z0-9_]*$"
+            },
+            "description": "Environment variables for the test step in CI (non-secret; e.g. DATABASE_URL pointing at a test service)."
           }
         },
         "allOf": [

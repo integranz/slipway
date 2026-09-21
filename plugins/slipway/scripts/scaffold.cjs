@@ -57,7 +57,7 @@ for (const app of ctx.derived.apps) if (!onlyApp || app.name === onlyApp) {
   for (const [dim, opt] of optionSets) addSet(path.join(T, dim, opt, "per-app"), repo, appCtx, `${dim}=${opt} (per app)`, tokens);
   missing.splice(before).forEach(m => perAppMissing.add(m)); // per-app sets are optional per option; report once
   const stackDir = path.join(T, "stack", app.stack, "app");
-  if (fs.existsSync(stackDir) && app.build && app.build.error) { console.error(`config error: ${app.build.error}\nnothing was written`); process.exit(1); }
+  if (app.build && app.build.error) { console.error(`config error: ${app.build.error}\nnothing was written`); process.exit(1); } // also for stacks without templates (custom: missing Dockerfile)
   addSet(stackDir, path.join(repo, app.path), appCtx, `stack=${app.stack} (${app.name})`);
 }
 if (missing.length) console.log(`  (no repo-side templates for: ${missing.join(", ")})`);
@@ -75,8 +75,10 @@ for (const item of plan) {
   }
   rendered.push({ ...item, relDest, content });
 }
-const dup = rendered.map(r => r.relDest).filter((d, i, a) => a.indexOf(d) !== i);
-if (dup.length) { console.error(`template error: several templates render to the same file: ${[...new Set(dup)].join(", ")}\nnothing was written`); process.exit(1); }
+// Two templates may target one file only when an app-level (stack) file shadows a common one, e.g. an app at the repository
+// root whose .dockerignore replaces the common .dockerignore: the later set wins and the earlier is dropped.
+const seen = new Map(); for (const r of rendered) { if (seen.has(r.relDest)) console.log(`  shadow  ${r.relDest} (app-level template replaces the common one)`); seen.set(r.relDest, r); }
+rendered.splice(0, rendered.length, ...seen.values());
 
 // Phase 2: write.
 const summary = { written: 0, skipped: 0, merged: 0 };
@@ -110,7 +112,7 @@ console.log(`done: ${summary.written} written, ${summary.merged} merged, ${summa
 
 // Files from the combined-pipeline layout (before one CI/CD per app) are never deleted by the scaffold; point at them.
 if (!onlyApp) {
-  const legacy = [".github/workflows/ci.yml", ".github/workflows/cd.yml", "infra/app", ...(config.options.versioning === "nbgv" ? ["version.json"] : [])]
+  const legacy = [".github/workflows/ci.yml", ".github/workflows/cd.yml", "infra/app", ...(config.options.versioning === "nbgv" && !derived.has_root_app ? ["version.json"] : [])]
     .filter(p => fs.existsSync(path.join(repo, p)));
   if (legacy.length) console.log(`  legacy  ${legacy.join(", ")}: combined-pipeline layout; every app now has its own workflows, infra/apps/<app> and version.json. Remove these after migrating (see the plugin docs, PIPELINES-PER-APP.md).`);
 }

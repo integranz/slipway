@@ -6,7 +6,7 @@ paths:
 ---
 # Container image rules (<% derived.option_labels.base_image %>)
 
-- Multi-stage: build in a full-toolchain image, run in the smallest runtime image of the same family. Base image family: `<% options.base_image %>`; do not mix families (glibc vs musl packages are not interchangeable).
+- Multi-stage: build in a full-toolchain image, run in the smallest runtime image of the same family. Base image family: `<% options.base_image %>`; do not mix families (glibc vs musl packages are not interchangeable). A `stack: custom` Dockerfile is hand-written and must still honour `ARG VERSION`/`ARG COMMIT`, the health endpoint, a non-root runtime and environment-only configuration (see the plugin's `stack-custom.md`).
 - Runtime images run as non-root, contain no shell or package manager, and expose only the app port declared in `.slipway/config.yaml`.
 - Accept `ARG VERSION` and stamp it as the OCI label `org.opencontainers.image.version` and into the app (`/health` returns it) so `/slipway:verify` can compare running version to tag.
 - No secrets, tokens or `.env` files copied into any layer; configuration arrives as environment variables at runtime.
