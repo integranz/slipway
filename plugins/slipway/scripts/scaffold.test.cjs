@@ -228,7 +228,7 @@ test("per-app CI workflows: thin callers with path filters, gate job, shared _ci
     assert.deepEqual(Object.keys(doc.jobs), ["version", "image", "release"], "tests moved to the per-app callers"); assert.deepEqual(doc.jobs.image.needs, ["version"]); assert.ok(!ci.includes("test_command"), "_ci.yml carries no test inputs any more");
     for (const s of must) assert.ok(ci.includes(s), `${versioning}: _ci.yml missing ${s}`);
     for (const s of mustNot) assert.ok(!ci.includes(s), `${versioning}: _ci.yml must not contain ${s}`);
-    for (const s of ["registry: dhi.io", "azure/login@v3", "az acr login --name acradlcdemo", "provenance: false", "acradlcdemo.azurecr.io", "Refuse to overwrite an existing tag", "${{ inputs.image_repository }}", "file: ${{ inputs.dockerfile }}", "release-manifest-${{ inputs.app }}-"]) assert.ok(ci.includes(s), `_ci.yml missing ${s}`);
+    for (const s of ["registry: dhi.io", "azure/login@v3", "az acr login --name acradlcdemo", "provenance: false", "acradlcdemo.azurecr.io", "Refuse to overwrite an existing tag", "${{ inputs.image_repository }}", "file: ${{ inputs.dockerfile }}", "release-manifest-${{ inputs.app }}-", "github.run_attempt", "steps.tagcheck.outputs.exists != 'true'", "steps.build.outputs.digest || steps.tagcheck.outputs.digest"]) assert.ok(ci.includes(s), `_ci.yml missing ${s}`);
     assert.doesNotMatch(ci, /:latest/, "no mutable tags in _ci.yml");
     // per-app callers
     const web = yaml.load(read(repo, ".github/workflows/slipway-demo-web-ci.yml"));

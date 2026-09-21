@@ -96,7 +96,7 @@ jobs:
     needs: [version]   # tests run in the calling workflow (per app, with that app's service containers) before this workflow starts
     runs-on: ubuntu-latest
     outputs:
-      digest: ${{ steps.build.outputs.digest }}
+      digest: ${{ steps.build.outputs.digest || steps.tagcheck.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -116,15 +116,24 @@ jobs:
 <%/eq%><%#eq options.registry "acr"%>      - name: Log in to the container registry
         if: env.IS_RELEASE == 'true'
         run: az acr login --name <% azure.acr_name %>
-      - name: Refuse to overwrite an existing tag (tags are immutable)
+      - name: Refuse to overwrite an existing tag (tags are immutable; a re-run reuses its own earlier push)
+        id: tagcheck
         if: env.IS_RELEASE == 'true'
         run: |
-          if [ -n "$(az acr repository show -n <% azure.acr_name %> --image "${{ inputs.image_repository }}:${{ needs.version.outputs.version }}" --query digest -o tsv 2>/dev/null)" ]; then
-            echo "::error::${{ inputs.image_repository }}:${{ needs.version.outputs.version }} already exists in <% azure.acr_name %>. Tags are immutable: bump the version (new commit) instead of re-running a release build."
-            exit 1
+          d="$(az acr repository show -n <% azure.acr_name %> --image "${{ inputs.image_repository }}:${{ needs.version.outputs.version }}" --query digest -o tsv 2>/dev/null || true)"
+          if [ -z "$d" ]; then echo "exists=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "${{ github.run_attempt }}" -gt 1 ]; then
+            # An earlier attempt of this very run pushed the tag and then failed later (for example an artifact upload):
+            # the tag stays immutable, the image is reused, nothing is rebuilt or re-pushed.
+            echo "exists=true" >> "$GITHUB_OUTPUT"; echo "digest=$d" >> "$GITHUB_OUTPUT"
+            echo "re-run attempt ${{ github.run_attempt }}: ${{ inputs.image_repository }}:${{ needs.version.outputs.version }} already pushed by the earlier attempt ($d); reusing it" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+          echo "::error::${{ inputs.image_repository }}:${{ needs.version.outputs.version }} already exists in <% azure.acr_name %>. Tags are immutable: bump the version (new commit) instead of re-running a release build."
+          exit 1
 <%/eq%>      - name: Build${{ env.IS_RELEASE == 'true' && ' and push' || '' }} ${{ inputs.app }}
         id: build
+        if: steps.tagcheck.outputs.exists != 'true'
         uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.context }}
@@ -142,10 +151,12 @@ jobs:
           cache-from: type=gha,scope=${{ inputs.app }}
           cache-to: type=gha,scope=${{ inputs.app }},mode=max
       - name: Record image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest || steps.tagcheck.outputs.digest }}
         run: |
           mkdir -p manifest
-          printf '{"app":"%s","image":"%s","tag":"%s","digest":"%s"}\n' "${{ inputs.app }}" "${{ env.REGISTRY }}/${{ inputs.image_repository }}" "${{ needs.version.outputs.version }}" "${{ steps.build.outputs.digest }}" > "manifest/${{ inputs.app }}.json"
-          echo "- \`${{ env.REGISTRY }}/${{ inputs.image_repository }}:${{ needs.version.outputs.version }}\` ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          printf '{"app":"%s","image":"%s","tag":"%s","digest":"%s"}\n' "${{ inputs.app }}" "${{ env.REGISTRY }}/${{ inputs.image_repository }}" "${{ needs.version.outputs.version }}" "$DIGEST" > "manifest/${{ inputs.app }}.json"
+          echo "- \`${{ env.REGISTRY }}/${{ inputs.image_repository }}:${{ needs.version.outputs.version }}\` $DIGEST" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:
           name: image-${{ inputs.app }}-${{ needs.version.outputs.version }}
