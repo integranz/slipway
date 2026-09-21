@@ -42,6 +42,9 @@ The plugin reads `.slipway/config.yaml` and repository files. It sends nothing a
 | `scripts/ruleset.cjs` | GitHub ruleset JSON for the default branch: pull requests only plus the per-app `<app> changes` / `<app> ci` checks |
 | `scripts/tracking-queue.cjs add\|list\|pop\|clear` | Offline queue of tracker updates when Jira is unreachable; replayed by `/slipway:ticket sync` |
 
+## Updating
+A repository that enables the plugin through its `.claude/settings.json` gets a **project-scope** install next to your user-scope one; `claude plugin list` shows both. After a release update both: `claude plugin update slipway@slipway-marketplace` and, inside the repository, `claude plugin update slipway@slipway-marketplace --scope project`. Sessions load the plugin at start: restart after updating.
+
 ## Pipelines per app
 Every app gets `<prefix>-<app>-ci` and `<prefix>-<app>-cd` (thin callers of the shared `_ci.yml`/`_cd.yml`), its own `version.json` with path filters, its own git tags `<app>/v<semver>` and its own Terraform module and state under `infra/apps/<app>`. A change triggers only the apps whose inputs it touches; shared inputs trigger every app that lists them. Options `cd_trigger` (manual or after a green CI) and `pr_checks` (pure path filter or an always-running gate for protected branches) shape the workflows. Design: `docs/PIPELINES-PER-APP.md` in the plugin repository.
 
