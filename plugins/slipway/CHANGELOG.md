@@ -1,3 +1,16 @@
+## [1.0.0](https://github.com/integranz/slipway/compare/v0.16.1...v1.0.0) (2026-09-21)
+
+### ⚠ BREAKING CHANGES
+
+* **freeze:** first stable release; the 0.x line is closed. No consumer-facing contract changes
+relative to 0.16.1.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+
+### Miscellaneous Chores
+
+* **freeze:** freeze plugin contents as 1.0.0 for the Q3 review ([f350c57](https://github.com/integranz/slipway/commit/f350c5752bbde0af880ae161f3b55b87d8899242))
+
 ## [0.16.1](https://github.com/integranz/slipway/compare/v0.16.0...v0.16.1) (2026-09-21)
 
 ### Bug Fixes
