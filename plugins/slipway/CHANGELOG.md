@@ -1,3 +1,9 @@
+## [0.16.1](https://github.com/integranz/slipway/compare/v0.16.0...v0.16.1) (2026-09-21)
+
+### Bug Fixes
+
+* **ci:** a re-run of the same workflow run reuses the image its earlier attempt already pushed ([95e1b5e](https://github.com/integranz/slipway/commit/95e1b5ef122e0e30aa6bbeac03c0b1b327843949))
+
 ## [0.16.0](https://github.com/integranz/slipway/compare/v0.15.2...v0.16.0) (2026-09-21)
 
 ### Features
