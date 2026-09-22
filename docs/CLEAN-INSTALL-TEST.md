@@ -15,3 +15,18 @@ Purpose: prove that a consumer with no prior state can install the plugin under 
 | 5 | `claude -p` from an unrelated directory, asked to list skills containing `slipway` | `slipway:bootstrap`, `slipway:delivery-knowledge` (the other skills are user-invoked only, so they are not listed to the model by design) |
 
 Not covered by the pre-check (left for 25 Sep): hooks firing from the installed copy, MCP servers from the installed `.mcp.json`, a bootstrap run into a fresh repo, and the install from `extraKnownMarketplaces` in a consumer repo's `.claude/settings.json`.
+
+## Plan for 25 Sep 2026: the clean install runs in **Cursor**
+
+Decided with the owner on 2026-09-22 ("the test and demo will be done using cursor"). Claude Code steps 1–5 above stay as the secondary check.
+
+| Step | Action | Pass criterion |
+|---|---|---|
+| C1 | Cursor with no slipway state: remove `~/.cursor/plugins/local/slipway` if present; team marketplace *Import from Repo* `https://github.com/integranz/slipway` (or `npm run install:cursor-local` from a checkout of the released tag), *Developer: Reload Window* | Settings → Plugins lists **slipway** with 8 skills, 3 subagents, 1 rule, hooks and 3 MCP servers |
+| C2 | New Agent session in `integranz/taskflow` (fresh clone) | the first assistant context mentions `slipway plugin root: …` (session-start hook) |
+| C3 | Ask the agent to run `echo approve-apply-probe` | blocked, message starts `slipway guard:` |
+| C4 | Ask the agent to read `.slipway/.env` (create an empty one first) | read denied by the hook |
+| C5 | `/launch` | preflight table, interview, `.slipway/config.yaml`, scaffold, story in Jira (DEVOPS), Azure/GitHub prerequisites with the user approving each command |
+| C6 | Foundation apply | the agent is denied without a token; the human runs `approve-apply.sh` in a terminal; the retry applies; `.slipway/approvals/` empty afterwards |
+| C7 | CI, CD approval, `/verify api dev <tag>` | evidence file written, subtasks Done, story Done |
+| C8 | Record the real Cursor edit-tool input keys and whether `ask` prompted (Hooks output channel) | `docs/HOOKS.md` §6 updated with the findings |

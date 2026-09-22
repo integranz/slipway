@@ -2,15 +2,18 @@
   "name": "slipway-marketplace",
   "version": "0.0.0-development",
   "private": true,
-  "description": "Marketplace and source for the slipway Claude Code plugin. Versioned with semantic-release (Conventional Commits).",
+  "description": "Marketplace and source for the slipway plugin (Claude Code and Cursor). Versioned with semantic-release (Conventional Commits).",
   "scripts": {
-    "test": "npm run -s test:unit && npm run -s test:hooks",
+    "test": "npm run -s test:unit && npm run -s test:hooks && npm run -s test:cursor",
     "test:unit": "node --test plugins/slipway/scripts/lib/render.test.cjs plugins/slipway/scripts/scaffold.test.cjs plugins/slipway/scripts/verify.test.cjs plugins/slipway/scripts/tracking-queue.test.cjs plugins/slipway/scripts/ruleset.test.cjs",
     "test:hooks": "bash plugins/slipway/hooks/test-hooks.sh",
     "build:validator": "node scripts/build-validator.cjs",
     "validate:config-example": "node scripts/validate-config-example.mjs",
     "validate:plugin": "claude plugin validate ./plugins/slipway --strict && claude plugin validate . --strict",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "test:cursor": "node --test scripts/cursor-plugin.test.cjs && bash plugins/slipway/cursor/hooks/test-cursor-hooks.sh",
+    "build:cursor": "node scripts/build-cursor-assets.cjs",
+    "install:cursor-local": "bash scripts/cursor-local-install.sh"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^7.0.0",

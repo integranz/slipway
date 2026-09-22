@@ -1,0 +1,18 @@
+{
+  "name": "slipway-marketplace",
+  "displayName": "slipway",
+  "owner": {
+    "name": "Abdelazim Ali"
+  },
+  "metadata": {
+    "description": "Marketplace for the slipway plugin (Agentic Delivery Lifecycle): repo intake, containerisation, Terraform on Azure, per-app GitHub Actions CI/CD with immutable tags, deployment verification and Jira tracking. The same plugin directory also installs in Claude Code (.claude-plugin/marketplace.json).",
+    "pluginRoot": "plugins"
+  },
+  "plugins": [
+    {
+      "name": "slipway",
+      "source": "slipway",
+      "description": "Agentic Delivery Lifecycle: interview-driven intake of a repo, app classification, hardened multi-stage Dockerfiles, Terraform (Azure), one CI and one CD per app with immutable tags, deployment verification and Jira tracking. Option-based: cloud, compute, registry, runner, versioning, branching, tracker and secret store are chosen per repo."
+    }
+  ]
+}

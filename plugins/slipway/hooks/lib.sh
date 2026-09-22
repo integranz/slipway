@@ -46,8 +46,9 @@ ask_with_reason() { # $1 = reason shown to the human in the permission prompt ; 
 # A human can answer a permission prompt only in an attended session. Claude Code exports CLAUDE_CODE_SESSION_ATTENDED=1
 # to hooks of a terminal session a person is watching (0 for `claude -p`, background jobs and child sessions; measured
 # 2026-09-20, not documented, so absence fails safe). bypassPermissions and dontAsk never show a prompt: treat as unattended.
+# The Cursor adapter (cursor/hooks/session-start.sh) sets SLIPWAY_SESSION_ATTENDED from Cursor's is_background_agent.
 attended() {
-  [ "${CLAUDE_CODE_SESSION_ATTENDED:-0}" = "1" ] || return 1
+  { [ "${CLAUDE_CODE_SESSION_ATTENDED:-0}" = "1" ] || [ "${SLIPWAY_SESSION_ATTENDED:-0}" = "1" ]; } || return 1
   case "$(hook_json permission_mode)" in bypassPermissions|dontAsk) return 1;; esac
   return 0
 }

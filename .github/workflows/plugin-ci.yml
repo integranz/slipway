@@ -27,17 +27,22 @@ jobs:
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck >/dev/null
-          shellcheck -S warning plugins/slipway/hooks/*.sh plugins/slipway/scripts/*.sh scripts/release/*.sh
+          shellcheck -S warning plugins/slipway/hooks/*.sh plugins/slipway/cursor/hooks/*.sh plugins/slipway/scripts/*.sh scripts/*.sh scripts/release/*.sh
       - name: Shell syntax
         run: |
           shopt -s nullglob
-          for f in scripts/**/*.sh plugins/slipway/hooks/*.sh plugins/slipway/scripts/*.sh; do bash -n "$f"; done
+          for f in scripts/*.sh scripts/**/*.sh plugins/slipway/hooks/*.sh plugins/slipway/cursor/hooks/*.sh plugins/slipway/scripts/*.sh; do bash -n "$f"; done
       - name: Release bump script self-test
         run: |
           tmp="$(mktemp)"; cp plugins/slipway/.claude-plugin/plugin.json "$tmp"
           PLUGIN_MANIFEST="$tmp" bash scripts/release/set-plugin-version.sh 9.9.9
           grep -q '"version": "9.9.9"' "$tmp"
+          tmp2="$(mktemp)"; cp plugins/slipway/.cursor-plugin/plugin.json "$tmp2"
+          PLUGIN_MANIFEST="$tmp2" bash scripts/release/set-plugin-version.sh 9.9.9
+          grep -q '"version": "9.9.9"' "$tmp2"
       - name: Unit and integration tests (renderer, scaffold)
         run: npm run test:unit
       - name: Hook tests
         run: npm run test:hooks
+      - name: Cursor plugin format (manifests, generated assets, hook adapters)
+        run: npm run test:cursor

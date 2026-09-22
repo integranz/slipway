@@ -1,0 +1,18 @@
+---
+description: slipway delivery plugin in Cursor — how its skills, subagents and guardrails map onto Cursor tools
+alwaysApply: true
+---
+# slipway in Cursor
+
+slipway (Agentic Delivery Lifecycle) is installed as a Cursor plugin. Its skills are the same files Claude Code runs as `/slipway:<name>`; in Cursor type `/launch`, `/bootstrap`, `/dockerize`, `/plan`, `/deploy`, `/verify` or `/ticket` (`delivery-knowledge` is reference material the agent loads on its own).
+
+## Reading the skills
+- **Plugin root**: the session-start context states `slipway plugin root: <path>`. Wherever a skill writes `${CLAUDE_PLUGIN_ROOT}`, use that path (fallback: the directory two levels above the skill's `SKILL.md`). Skill scripts run as `node "<root>/scripts/<name>.cjs" …` or `bash "<root>/scripts/<name>.sh" …`.
+- **Tool names**: `AskUserQuestion` → ask the user in chat and wait for the answer; `Agent` with `subagent_type` `explore` / `execute` / `verify` → the slipway subagents of the same names (explore and verify are read-only); `Read`, `Glob`, `Grep`, `Bash`, `Edit`, `Write` → Cursor's file, search, terminal and edit tools.
+- Skills marked `disable-model-invocation: true` run only when the user types the slash command. `/launch` reads the other skills' `SKILL.md` files and executes their steps itself.
+
+## Guardrails (enforced by the plugin's hooks; this rule only explains them)
+- `terraform apply` runs only with a saved plan file in `infra/foundation` **and** a human approval token: the human runs `bash "<root>/scripts/approve-apply.sh" <planfile>` in their own terminal (single use, 10 minutes). Never `destroy`, never `-auto-approve`, never apply `infra/apps/*` from a session: the app layer is applied by its CD workflow behind the GitHub environment approval.
+- Never stage or commit `.env*`, `*.tfvars`, state, plan or key files; never write secret literals into Terraform, workflows or Dockerfiles; only immutable image tags are pushed or deployed.
+- `.slipway/.env` (the local secret seed file) is sourced with `set -a; . .slipway/.env; set +a`, never read, printed or searched; never print `*TOKEN*`, `*SECRET*`, `*PASSWORD*` or `*_KEY` variables.
+- Cloud and GitHub administration (`setup-azure.sh --apply`, environments, rulesets, secrets, deployment approvals) is proposed with its reason and runs only after the user approves the command.

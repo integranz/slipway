@@ -166,4 +166,13 @@ expect "verify: heredoc allowed"                guard-readonly-agents.sh 0 "$(js
 expect "verify: 2>&1 allowed"                   guard-readonly-agents.sh 0 "$(json_bash 'terraform plan 2>&1 | tail -5' "$T" verify)"
 expect "no agent: unaffected"                 guard-readonly-agents.sh 0 "$(json_bash 'rm -rf build' "$T")"
 
+echo "attended marker set by the Cursor adapter (SLIPWAY_SESSION_ATTENDED)"
+unset CLAUDE_CODE_SESSION_ATTENDED SLIPWAY_SESSION_ATTENDED
+expect "no marker -> admin write denied"          guard-admin-actions.sh 2 "$(json_bash 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")"
+export SLIPWAY_SESSION_ATTENDED=1
+expect "SLIPWAY_SESSION_ATTENDED=1 -> ask"        guard-admin-actions.sh 0 "$(json_bash 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")" "$ASK"
+expect "marker but bypassPermissions -> denied"   guard-admin-actions.sh 2 "$(json_bash 'gh api -X PUT repos/o/r/environments/dev --input -' "$T" "" bypassPermissions)"
+expect "marker: apply without token -> ask"       guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" "$ASK"
+unset SLIPWAY_SESSION_ATTENDED
+
 echo; echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
