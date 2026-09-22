@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cursor beforeReadFile -> slipway guards. Input: {"file_path","content","attachments"}. Output allow|deny only.
-ASK_PERMISSION=deny
+export ASK_PERMISSION=deny # read by common.sh (beforeReadFile has no "ask")
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 f="$(cursor_json file_path)"
 [ -n "$f" ] || emit deny "could not read the file path from the hook input (failing closed)"
