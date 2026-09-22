@@ -7,6 +7,8 @@ Takes a repository from "code in a repo" to "versioned image running in the clou
 Status: **day 5 of 16**. Guard hooks, role sub-agents, MCP servers, option registry, config schema, scaffold engine, `bootstrap`, `dockerize` and `plan` skills, Docker Hardened Images templates for `dotnet8-api` and `react-vite`, `compose.yaml`, the Terraform foundation and Container Apps layers (azurerm 5.x), the GitHub Actions CI and gated CD templates and all five command skills (`dockerize`, `plan`, `deploy`, `verify`, `ticket`) are in place and exercised on `integranz/slipway-demo` (0.1.16 deployed to `dev` after a human approval, verified 19/19, tracked to Done in Jira DEVOPS-5).
 
 ## Install
+Full installation (Claude Code and Cursor) and usage guide: the repository [README](../../README.md).
+
 ```
 /plugin marketplace add integranz/slipway
 /plugin install slipway@slipway-marketplace
