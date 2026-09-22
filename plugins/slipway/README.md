@@ -45,7 +45,7 @@ The plugin reads `.slipway/config.yaml` and repository files. It sends nothing a
 | `scripts/tracking-queue.cjs add\|list\|pop\|clear` | Offline queue of tracker updates when Jira is unreachable; replayed by `/slipway:ticket sync` |
 
 ## Branches and releases
-`main` holds the frozen 1.0 line: only `fix:`, `docs:`, `chore:` and `test:` commits land there and release as 1.0.x. New capabilities go to `next`, which semantic-release publishes as `1.1.0-next.N` pre-releases; marketplace users follow `main`. `next` is merged into `main` after the Q3 review.
+`main` holds the frozen 1.0 line: only `fix:`, `docs:`, `chore:` and `test:` commits land there and release as 1.0.x. New capabilities go to `next`, which semantic-release publishes as `1.1.0-next.N` pre-releases; marketplace users follow `main`. `next` is merged into `main` after the Q3 review. `main` is protected: changes arrive through pull requests with the `validate` check green; only the `slipway-release` GitHub App may push directly, for the release commit.
 
 ## Updating
 A repository that enables the plugin through its `.claude/settings.json` gets a **project-scope** install next to your user-scope one; `claude plugin list` shows both. After a release update both: `claude plugin update slipway@slipway-marketplace` and, inside the repository, `claude plugin update slipway@slipway-marketplace --scope project`. Sessions load the plugin at start: restart after updating.
