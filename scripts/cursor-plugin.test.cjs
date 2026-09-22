@@ -65,7 +65,26 @@ test("hooks.json: version 1, adapter scripts exist and are executable, blocking 
     assert.ok(Number.isInteger(d.timeout) && d.timeout > 0, `${ev}: timeout`);
     if (blocking.includes(ev)) assert.equal(d.failClosed, true, `${ev}: failClosed`);
   }
-  assert.ok(h.hooks.preToolUse[0].matcher.includes("Write"), "preToolUse matcher covers Write");
+  assert.equal(h.hooks.preToolUse[0].command, "./cursor/hooks/pretooluse.sh", "preToolUse routes every tool through the dispatcher (the event Cursor 3.21 fires)");
+  assert.equal(h.hooks.preToolUse[0].matcher, undefined, "no matcher: the dispatcher decides by tool_name");
+});
+
+test("project wiring templates reference adapters that exist and the user-hooks installer registers the same five events", () => {
+  const tmpl = read(path.join(P, "templates", "common", "files", ".cursor", "hooks.json.tmpl"));
+  const cfg = JSON.parse(tmpl);
+  assert.equal(cfg.version, 1);
+  const adapters = new Set(fs.readdirSync(path.join(P, "cursor", "hooks")).filter((f) => f.endsWith(".sh") && !f.startsWith("test-") && f !== "common.sh").map((f) => f.replace(/\.sh$/, "")));
+  for (const [ev, defs] of Object.entries(cfg.hooks)) for (const d of defs) {
+    const m = d.command.match(/^bash \.slipway\/cursor-hooks\.sh ([a-z-]+)$/);
+    assert.ok(m, `${ev}: command goes through the shim`);
+    assert.ok(adapters.has(m[1]), `${ev}: adapter ${m[1]} exists`);
+    if (ev !== "sessionStart") assert.equal(d.failClosed, true, `${ev}: failClosed`);
+  }
+  const shim = read(path.join(P, "templates", "common", "files", ".slipway", "cursor-hooks.sh.tmpl"));
+  for (const a of ["pretooluse", "shell", "mcp", "read", "session-start"]) assert.ok(shim.includes(a), `shim accepts ${a}`);
+  assert.ok(shim.includes(".cursor/plugins/local/slipway") && shim.includes(".cursor/plugins/cache"), "shim looks in the local folder and the marketplace cache");
+  const installer = read(path.join(R, "scripts", "cursor-local-install.sh"));
+  for (const ev of ["sessionStart", "preToolUse", "beforeShellExecution", "beforeMCPExecution", "beforeReadFile"]) assert.ok(installer.includes(ev), `installer registers ${ev}`);
 });
 
 test("generated Cursor assets (subagents, mcp.json) are in sync with the Claude Code sources", () => {

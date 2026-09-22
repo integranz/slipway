@@ -8,11 +8,15 @@ git -C "$T" init -q -b main; mkdir -p "$T/infra/foundation" "$T/infra/apps/api" 
 printf 'plan' > "$T/infra/foundation/tfplan.dev"; printf 'plan' > "$T/infra/apps/api/tfplan.dev"
 printf '.slipway/approvals/\n*.tfvars\n!*.tfvars.example\ntfplan*\n.env\n' > "$T/.gitignore"; git -C "$T" add .gitignore; git -C "$T" -c user.email=t@t -c user.name=t commit -qm init
 unset SLIPWAY_SESSION_ATTENDED CLAUDE_CODE_SESSION_ATTENDED
+export SLIPWAY_CURSOR_CACHE="$T/cache"; export SLIPWAY_CURSOR_CACHE_TTL=3
+clear_cache() { rm -rf "$T/cache"; }
 
-shell_in() { python3 -c 'import json,sys; print(json.dumps({"command":sys.argv[1],"cwd":sys.argv[2],"sandbox":False,"conversation_id":"c1","hook_event_name":"beforeShellExecution"}))' "$1" "$2"; }
-mcp_in() { python3 -c 'import json,sys; print(json.dumps({"tool_name":sys.argv[1],"tool_input":sys.argv[2],"mcp_server_name":sys.argv[3],"url":"https://x","hook_event_name":"beforeMCPExecution"}))' "$1" "$2" "$3"; }
-read_in() { python3 -c 'import json,sys; print(json.dumps({"file_path":sys.argv[1],"content":"x","attachments":[]}))' "$1"; }
-write_in() { python3 -c 'import json,sys; print(json.dumps({"tool_name":sys.argv[1],"tool_input":json.loads(sys.argv[2]),"cwd":sys.argv[3],"tool_use_id":"t1"}))' "$1" "$2" "$3"; }
+uid() { python3 -c 'import uuid; print(uuid.uuid4().hex[:12])'; }
+shell_in() { python3 -c 'import json,sys; print(json.dumps({"command":sys.argv[1],"cwd":sys.argv[2],"sandbox":False,"conversation_id":"c"+sys.argv[3],"hook_event_name":"beforeShellExecution"}))' "$1" "$2" "$(uid)"; }
+mcp_in() { python3 -c 'import json,sys; print(json.dumps({"tool_name":sys.argv[1],"tool_input":sys.argv[2],"mcp_server_name":sys.argv[3],"url":"https://x","conversation_id":"c"+sys.argv[4],"hook_event_name":"beforeMCPExecution"}))' "$1" "$2" "$3" "$(uid)"; }
+read_in() { python3 -c 'import json,sys; print(json.dumps({"file_path":sys.argv[1],"content":"x","attachments":[],"conversation_id":"c"+sys.argv[2]}))' "$1" "$(uid)"; }
+pre_in() { python3 -c 'import json,sys; print(json.dumps({"conversation_id":"c-"+sys.argv[4],"tool_name":sys.argv[1],"tool_input":json.loads(sys.argv[2]),"cwd":"","workspace_roots":[sys.argv[3]],"tool_use_id":"t1","hook_event_name":"preToolUse","cursor_version":"3.21.16"}))' "$1" "$2" "$3" "${4:-1}"; }
+write_in() { python3 -c 'import json,sys; print(json.dumps({"tool_name":sys.argv[1],"tool_input":json.loads(sys.argv[2]),"cwd":sys.argv[3],"tool_use_id":"t1","conversation_id":"c"+sys.argv[4]}))' "$1" "$2" "$3" "$(uid)"; }
 
 expect() { # name adapter want_permission input [env assignments...]
   local name="$1" adapter="$2" want="$3" input="$4"; shift 4
@@ -52,7 +56,8 @@ expect "cat .slipway/.env denied"                 shell.sh deny  "$(shell_in 'ca
 expect "sourcing .slipway/.env allowed"           shell.sh allow "$(shell_in 'set -a; . .slipway/.env; set +a; node scripts/preflight.cjs' "$T")"
 expect "bare env denied"                          shell.sh deny  "$(shell_in 'env' "$T")"
 expect "admin write attended -> ask"              shell.sh ask   "$(shell_in 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")" SLIPWAY_SESSION_ATTENDED=1
-expect "admin write unattended -> deny"           shell.sh deny  "$(shell_in 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")"
+expect "admin write, no marker -> ask (IDE default)" shell.sh ask   "$(shell_in 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")"
+expect "admin write, background agent -> deny"     shell.sh deny  "$(shell_in 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")" SLIPWAY_SESSION_ATTENDED=0
 expect "setup-azure --apply attended -> ask"      shell.sh ask   "$(shell_in 'bash .slipway/setup-azure.sh --apply --set-github-secrets' "$T")" SLIPWAY_SESSION_ATTENDED=1
 expect "missing command fails closed"             shell.sh deny  '{"cwd":"/tmp"}'
 expect "invalid JSON fails closed"                shell.sh deny  'not json'
@@ -81,6 +86,54 @@ expect "reference into main.tf allowed"           write.sh allow "$(write_in Wri
 expect "alternative keys (target_file/code_edit)" write.sh deny  "$(write_in edit_file '{"target_file":".github/workflows/ci.yml","code_edit":"password: \"Hunter2Hunter2Hunter2\""}' "$T")"
 expect "app source is not inspected"              write.sh allow "$(write_in Write '{"file_path":"src/index.ts","content":"const password = \"Hunter2Hunter2Hunter2\""}' "$T")"
 expect "non-edit tool passes through"             write.sh allow "$(write_in Shell '{"command":"ls"}' "$T")"
+
+
+echo "pretooluse.sh (generic preToolUse, the event Cursor 3.21.16 fires for every tool)"
+expect "Shell: probe blocked"                     pretooluse.sh deny  "$(pre_in Shell '{"command":"echo approve-apply-probe","cwd":"","timeout":30000}' "$T" p1)"
+expect "Shell: plain command allowed"             pretooluse.sh allow "$(pre_in Shell '{"command":"echo hello","cwd":"","timeout":30000}' "$T" p2)"
+expect "Shell: empty cwd -> workspace root (apply in foundation denied, not 'unknown layout')" pretooluse.sh deny "$(pre_in Shell '{"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":"","timeout":30000}' "$T" p3)"
+expect_msg "Shell: denial names the token"        pretooluse.sh 'approve-apply' "$(pre_in Shell '{"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":"","timeout":30000}' "$T" p4)"
+clear_cache; bash "$P/scripts/approve-apply.sh" "$T/infra/foundation/tfplan.dev" >/dev/null
+expect "Shell: approved apply allowed"            pretooluse.sh allow "$(pre_in Shell '{"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":"","timeout":30000}' "$T" p5)"
+expect "same call through beforeShellExecution replays allow (token consumed once)" shell.sh allow "$(python3 -c 'import json,sys; print(json.dumps({"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":sys.argv[1],"conversation_id":"c-p5"}))' "$T")"
+sleep 4
+expect "after the cache window the same command is judged again (denied)" shell.sh deny "$(python3 -c 'import json,sys; print(json.dumps({"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":sys.argv[1],"conversation_id":"c-p5"}))' "$T")"
+expect "Read: seed file denied"                   pretooluse.sh deny  "$(pre_in Read '{"path":".slipway/.env"}' "$T" p6)"
+expect "Read: unknown input shape allowed"        pretooluse.sh allow "$(pre_in Read '{"something":"else"}' "$T" p7)"
+expect "Write: secret literal denied"             pretooluse.sh deny  "$(pre_in Write '{"path":"infra/foundation/main.tf","contents":"client_secret = \"S3cr3tValue1234567890\""}' "$T" p8)"
+expect "Edit: reference allowed"                  pretooluse.sh allow "$(pre_in Edit '{"file_path":"infra/foundation/main.tf","new_string":"client_secret = var.client_secret"}' "$T" p9)"
+expect "MCP-like tool: run_workflow mutable tag denied" pretooluse.sh deny "$(pre_in actions_run_trigger '{"method":"run_workflow","workflow_id":"x-api-cd.yml","inputs":{"tag":"latest"}}' "$T" p10)"
+expect "unknown tool allowed"                     pretooluse.sh allow "$(pre_in Grep '{"pattern":"x"}' "$T" p11)"
+expect "missing tool name allowed (not a tool call we judge)" pretooluse.sh allow '{"conversation_id":"c-p12"}'
+
+echo "project wiring: .slipway/cursor-hooks.sh (rendered template) and the user hooks file"
+R="$T/repo"; mkdir -p "$R/.slipway" "$T/home"
+cp "$P/templates/common/files/.slipway/cursor-hooks.sh.tmpl" "$R/.slipway/cursor-hooks.sh"
+out="$(cd "$R" && printf '{"command":"echo approve-apply-probe","cwd":"%s","conversation_id":"c-w1"}' "$R" | SLIPWAY_PLUGIN_ROOT="$P" bash .slipway/cursor-hooks.sh shell)"
+if printf '%s' "$out" | grep -q '"permission": "deny"'; then pass=$((pass+1)); echo "  ok   shim routes to the plugin given by SLIPWAY_PLUGIN_ROOT (probe denied)"; else fail=$((fail+1)); echo "  FAIL shim routing: $out"; fi
+out="$(cd "$R" && printf '{"command":"echo approve-apply-probe","cwd":"%s"}' "$R" | HOME="$T/home" SLIPWAY_PLUGIN_ROOT= bash .slipway/cursor-hooks.sh shell)"
+if [ "$out" = '{"permission":"allow"}' ]; then pass=$((pass+1)); echo "  ok   shim without an installed plugin allows (guards inactive, not broken)"; else fail=$((fail+1)); echo "  FAIL shim without plugin: $out"; fi
+out="$(cd "$R" && printf '{"session_id":"s"}' | HOME="$T/home" SLIPWAY_PLUGIN_ROOT= bash .slipway/cursor-hooks.sh session-start)"
+if printf '%s' "$out" | grep -q 'NOT enforced'; then pass=$((pass+1)); echo "  ok   shim without plugin warns at session start"; else fail=$((fail+1)); echo "  FAIL shim session-start warning: $out"; fi
+mkdir -p "$T/home/.cursor/plugins/local"; ln -s "$P" "$T/home/.cursor/plugins/local/slipway"
+out="$(cd "$R" && printf '{"command":"echo approve-apply-probe","cwd":"%s","conversation_id":"c-w2"}' "$R" | HOME="$T/home" SLIPWAY_PLUGIN_ROOT= bash .slipway/cursor-hooks.sh shell)"
+if printf '%s' "$out" | grep -q '"permission": "deny"'; then pass=$((pass+1)); echo "  ok   shim finds ~/.cursor/plugins/local/slipway"; else fail=$((fail+1)); echo "  FAIL shim local lookup: $out"; fi
+INST="$P/../../scripts/cursor-local-install.sh"
+if [ -f "$INST" ]; then
+  printf '{"version":1,"hooks":{"preToolUse":[{"command":"node /elsewhere/other-hook.cjs"}]}}\n' > "$T/user-hooks.json"
+  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" bash "$INST" >/dev/null 2>&1
+  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" bash "$INST" >/dev/null 2>&1
+  if python3 -c '
+import json,sys; c=json.load(open(sys.argv[1])); h=c["hooks"]
+ours=[x for ev in h.values() for x in ev if "/slipway/cursor/hooks/" in x["command"]]
+assert len(ours)==5, ours
+assert any("other-hook" in x["command"] for x in h["preToolUse"]), "foreign entry kept"
+assert all(x.get("failClosed") for x in ours if "session-start" not in x["command"]), "failClosed"
+assert sys.argv[2]+"/slipway/cursor/hooks/pretooluse.sh" in json.dumps(c), "absolute path to the local plugin"' "$T/user-hooks.json" "$T/local"; then pass=$((pass+1)); echo "  ok   install script merges 5 hook entries once (idempotent), keeps foreign entries"; else fail=$((fail+1)); echo "  FAIL install script merge: $(cat "$T/user-hooks.json")"; fi
+  [ -f "$T/local/slipway/cursor/hooks/pretooluse.sh" ] && { pass=$((pass+1)); echo "  ok   install script copied the plugin"; } || { fail=$((fail+1)); echo "  FAIL plugin copy missing"; }
+  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" bash "$INST" --uninstall >/dev/null 2>&1
+  if [ ! -d "$T/local/slipway" ] && ! grep -q slipway "$T/user-hooks.json" && grep -q other-hook "$T/user-hooks.json"; then pass=$((pass+1)); echo "  ok   --uninstall removes the folder and only our entries"; else fail=$((fail+1)); echo "  FAIL uninstall"; fi
+fi
 
 echo "session-start.sh"
 out="$(printf '{"session_id":"s1","is_background_agent":false,"composer_mode":"agent"}' | bash "$H/session-start.sh")"
