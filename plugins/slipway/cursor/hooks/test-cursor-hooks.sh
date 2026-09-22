@@ -111,12 +111,12 @@ R="$T/repo"; mkdir -p "$R/.slipway" "$T/home"
 cp "$P/templates/common/files/.slipway/cursor-hooks.sh.tmpl" "$R/.slipway/cursor-hooks.sh"
 out="$(cd "$R" && printf '{"command":"echo approve-apply-probe","cwd":"%s","conversation_id":"c-w1"}' "$R" | SLIPWAY_PLUGIN_ROOT="$P" bash .slipway/cursor-hooks.sh shell)"
 if printf '%s' "$out" | grep -q '"permission": "deny"'; then pass=$((pass+1)); echo "  ok   shim routes to the plugin given by SLIPWAY_PLUGIN_ROOT (probe denied)"; else fail=$((fail+1)); echo "  FAIL shim routing: $out"; fi
-out="$(cd "$R" && printf '{"command":"echo approve-apply-probe","cwd":"%s"}' "$R" | HOME="$T/home" SLIPWAY_PLUGIN_ROOT= bash .slipway/cursor-hooks.sh shell)"
+out="$(cd "$R" && printf '{"command":"echo approve-apply-probe","cwd":"%s"}' "$R" | HOME="$T/home" SLIPWAY_PLUGIN_ROOT='' bash .slipway/cursor-hooks.sh shell)"
 if [ "$out" = '{"permission":"allow"}' ]; then pass=$((pass+1)); echo "  ok   shim without an installed plugin allows (guards inactive, not broken)"; else fail=$((fail+1)); echo "  FAIL shim without plugin: $out"; fi
-out="$(cd "$R" && printf '{"session_id":"s"}' | HOME="$T/home" SLIPWAY_PLUGIN_ROOT= bash .slipway/cursor-hooks.sh session-start)"
+out="$(cd "$R" && printf '{"session_id":"s"}' | HOME="$T/home" SLIPWAY_PLUGIN_ROOT='' bash .slipway/cursor-hooks.sh session-start)"
 if printf '%s' "$out" | grep -q 'NOT enforced'; then pass=$((pass+1)); echo "  ok   shim without plugin warns at session start"; else fail=$((fail+1)); echo "  FAIL shim session-start warning: $out"; fi
 mkdir -p "$T/home/.cursor/plugins/local"; ln -s "$P" "$T/home/.cursor/plugins/local/slipway"
-out="$(cd "$R" && printf '{"command":"echo approve-apply-probe","cwd":"%s","conversation_id":"c-w2"}' "$R" | HOME="$T/home" SLIPWAY_PLUGIN_ROOT= bash .slipway/cursor-hooks.sh shell)"
+out="$(cd "$R" && printf '{"command":"echo approve-apply-probe","cwd":"%s","conversation_id":"c-w2"}' "$R" | HOME="$T/home" SLIPWAY_PLUGIN_ROOT='' bash .slipway/cursor-hooks.sh shell)"
 if printf '%s' "$out" | grep -q '"permission": "deny"'; then pass=$((pass+1)); echo "  ok   shim finds ~/.cursor/plugins/local/slipway"; else fail=$((fail+1)); echo "  FAIL shim local lookup: $out"; fi
 INST="$P/../../scripts/cursor-local-install.sh"
 if [ -f "$INST" ]; then
