@@ -1,0 +1,13 @@
+.git
+.github
+.slipway
+.claude
+infra
+**/node_modules
+**/dist
+**/bin
+**/obj
+**/.env*
+**/*.md
+**/Dockerfile*
+**/.dockerignore

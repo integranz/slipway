@@ -1,0 +1,83 @@
+# App layer for `<% app.name %>`: one container app in the shared environment (infra/foundation). The container app is
+# named exactly after the app so other apps reach it as http://<% app.name %> through the environment proxy.
+
+resource "azurerm_container_app" "this" {
+  name                         = "<% app.name %>"
+  container_app_environment_id = data.azurerm_container_app_environment.this.id
+  resource_group_name          = data.azurerm_resource_group.env.name
+  revision_mode                = "Single"
+  tags                         = local.tags
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [data.azurerm_user_assigned_identity.apps.id]
+  }
+
+  registry {
+    server   = data.azurerm_container_registry.this.login_server
+    identity = data.azurerm_user_assigned_identity.apps.id
+  }
+<%#each app.secrets%>
+  secret {
+    name                = "<% name %>"
+    identity            = data.azurerm_user_assigned_identity.apps.id
+    key_vault_secret_id = "${data.azurerm_key_vault.this.vault_uri}secrets/<% name %>"
+  }
+<%/each%><%#if app.has_ingress%>
+  ingress {
+    external_enabled           = <% app.external %>
+    target_port                = <% app.port %>
+    transport                  = "auto"
+    allow_insecure_connections = false
+
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+<%/if%>
+  template {
+    min_replicas = <% app.min_replicas %>
+    max_replicas = <% app.max_replicas %>
+
+    container {
+      name   = "<% app.name %>"
+      image  = "${data.azurerm_container_registry.this.login_server}/<% app.image_repository %>:${var.image_tag}"
+      cpu    = <% app.cpu %>
+      memory = "<% app.memory %>"
+
+      env {
+        name  = "APP_VERSION"
+        value = var.image_tag
+      }
+<%#each app.env_list%>
+      env {
+        name  = "<% name %>"
+        value = "<% value %>"
+      }
+<%/each%><%#each app.secrets%>
+      env {
+        name        = "<% env %>"
+        secret_name = "<% name %>"
+      }
+<%/each%><%#if app.health_path%>
+      liveness_probe {
+        transport               = "HTTP"
+        port                    = <% app.port %>
+        path                    = "<% app.health_path %>"
+        interval_seconds        = 10
+        initial_delay           = 5
+        failure_count_threshold = 3
+      }
+
+      readiness_probe {
+        transport               = "HTTP"
+        port                    = <% app.port %>
+        path                    = "<% app.health_path %>"
+        interval_seconds        = 5
+        failure_count_threshold = 3
+        success_count_threshold = 1
+      }
+<%/if%>    }
+  }
+}

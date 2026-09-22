@@ -1,12 +1,12 @@
 # Guardrail hooks (goal 2)
 
-Plugin hooks live in `plugins/adlc/hooks/hooks.json` and run for every tool call in a session **and inside sub-agents** (the hook input carries `agent_type`). Contract: exit 0 = no objection (optionally a JSON decision on stdout), exit 2 = blocked with the reason on stderr shown to Claude. All guards fail closed: a parse error is a block, not a pass.
+Plugin hooks live in `plugins/slipway/hooks/hooks.json` and run for every tool call in a session **and inside sub-agents** (the hook input carries `agent_type`). Contract: exit 0 = no objection (optionally a JSON decision on stdout), exit 2 = blocked with the reason on stderr shown to Claude. All guards fail closed: a parse error is a block, not a pass.
 
-Why hooks and not rules: a rule tells the model what to do; a hook makes it impossible to do otherwise. A hook `ask` decision becomes `allow` in headless (`-p`, Routine, cloud) sessions, so none of these guards rely on a UI prompt.
+Why hooks and not rules: a rule tells the model what to do; a hook makes it impossible to do otherwise. **Corrected 2026-09-20**: a hook `ask` decision does *not* become `allow` in headless sessions; measured in `claude -p`, the tool call is refused and the model receives the hook's reason (the docs: `ask` forces the permission prompt even in auto mode and shows the reason to the human). So `ask` is a real in-session gate in attended sessions, and the approval token remains the only way to approve in unattended ones.
 
-Branch tests: `bash plugins/adlc/hooks/test-hooks.sh` (76 cases, run in CI by `plugin-ci.yml`). Last local run: 2026-09-14, `passed=76 failed=0`.
+Branch tests: `bash plugins/slipway/hooks/test-hooks.sh` (113 cases, run in CI by `plugin-ci.yml`). Last local run: 2026-09-20, `passed=113 failed=0`.
 
-**Live gate test (2026-09-14, `adlc-demo` foundation layer):** in a Claude Code session with the plugin, `terraform -chdir=infra/foundation apply tfplan.dev` was blocked (`adlc guard: BLOCKED`, no approval); the human ran `scripts/approve-apply.sh infra/foundation/tfplan.dev` in another terminal; the same command then applied 8 resources and the hook consumed the token (`.adlc/approvals/` empty afterwards); a subsequent read-only plan reported no changes. Nothing was applied twice.
+**Live gate test (2026-09-14, `adlc-demo` foundation layer):** in a Claude Code session with the plugin, `terraform -chdir=infra/foundation apply tfplan.dev` was blocked (`slipway guard: BLOCKED`, no approval); the human ran `scripts/approve-apply.sh infra/foundation/tfplan.dev` in another terminal; the same command then applied 8 resources and the hook consumed the token (`.slipway/approvals/` empty afterwards); a subsequent read-only plan reported no changes. Nothing was applied twice.
 
 ---
 
@@ -14,9 +14,9 @@ Branch tests: `bash plugins/adlc/hooks/test-hooks.sh` (76 cases, run in CI by `p
 | | |
 |---|---|
 | **Runs** | `PreToolUse`, matcher `Bash`, whenever the command contains `terraform` |
-| **Blocks** | `terraform destroy`; `apply -auto-approve`; `apply -destroy`; `apply` without a saved plan file; `apply` whose plan file does not exist; any `apply` in `infra/app` (that layer is applied only by the CD workflow behind the GitHub Environment approval); `apply` of a plan file that has **no valid human approval token**; any attempt to run `approve-apply.sh` from the agent |
-| **Allows** | `plan`, `validate`, `fmt`, `init`, `show`, `output`; `apply <planfile>` in `infra/foundation` when a matching approval token exists (then consumes the token) |
-| **Human approval** | In a separate terminal: `bash <plugin-root>/scripts/approve-apply.sh infra/foundation/tfplan.dev`. Writes `.adlc/approvals/<sha256 of plan>` with a 10-minute expiry (`ADLC_APPROVAL_TTL` to change). Single use: the hook deletes it on the first allowed apply. A changed plan file has a different hash and needs a new approval. |
+| **Blocks** | `terraform destroy`; `apply -auto-approve`; `apply -destroy`; `apply` without a saved plan file; `apply` whose plan file does not exist; any `apply` in `infra/app` or `infra/apps/<app>` (the app layer is applied only by the app's CD workflow behind the GitHub Environment approval); `apply` of a plan file that has **no valid human approval token**; any attempt to run `approve-apply.sh` from the agent |
+| **Allows** | `plan`, `validate`, `fmt`, `init`, `show`, `output`; `apply <planfile>` in `infra/foundation` when a matching approval token exists (then consumes the token). **Attended session without a token** (`CLAUDE_CODE_SESSION_ATTENDED=1`, permission mode not `bypassPermissions`/`dontAsk`): returns `ask` with the plan summary (`terraform show` of the plan file) as the reason, so the human approves in the permission prompt; unattended without a token: denied with the token instructions |
+| **Human approval** | In a separate terminal: `bash <plugin-root>/scripts/approve-apply.sh infra/foundation/tfplan.dev`. Writes `.slipway/approvals/<sha256 of plan>` with a 10-minute expiry (`SLIPWAY_APPROVAL_TTL` to change). Single use: the hook deletes it on the first allowed apply. A changed plan file has a different hash and needs a new approval. |
 | **On failure** | Missing `jq` and `python3` → block. Unknown layout → block with instructions. Expired token → deleted and blocked. |
 | **Evidence** | `test-hooks.sh` section `guard-terraform-apply` (24 cases incl. `cd … &&` chains, `-chdir=`, pipes and redirects after the plan file); live headless checks 2026-09-09 on both layers; live approved apply 2026-09-14 (see above) |
 
@@ -50,7 +50,25 @@ Branch tests: `bash plugins/adlc/hooks/test-hooks.sh` (76 cases, run in CI by `p
 ---
 
 ## Testing a hook on a branch
-1. Edit the script; run `bash -n` and `bash plugins/adlc/hooks/test-hooks.sh`.
+1. Edit the script; run `bash -n` and `bash plugins/slipway/hooks/test-hooks.sh`.
 2. Add a case to `test-hooks.sh` for every new block/allow path (name, script, expected exit, JSON input).
 3. Open a PR; `plugin-ci.yml` runs the suite. Merge only when `failed=0`.
-4. For a live check: `claude -p --plugin-dir ./plugins/adlc --allowedTools "Bash(terraform *)" "run: terraform apply tfplan"` in a scratch repo; expect `adlc guard: BLOCKED`.
+4. For a live check: `claude -p --plugin-dir ./plugins/slipway --allowedTools "Bash(terraform *)" "run: terraform apply tfplan"` in a scratch repo; expect `slipway guard: BLOCKED`.
+
+## Coverage: a hook only protects the session that loads it
+
+Found on 2026-09-17: a background Claude Code job started from a folder **without** the repository's `.claude/settings.json` (and without the plugin enabled at user scope) ran the whole per-app cutover with **no slipway hooks active**. The human-approval protocol was still followed by discipline (plan, `approve-apply.sh` by the human, apply), but nothing enforced it mechanically, and the approval token was not consumed because no hook ran. A moved `--plugin-dir` path (`~/personal/adlc` → `~/personal/slipway`) fails the same way, silently.
+
+Rules that follow:
+- Enable the plugin at **user scope** on every machine that runs agents against these repositories (`claude plugin marketplace add integranz/slipway`, `claude plugin install slipway@slipway-marketplace`), not only through the repository's `.claude/settings.json`; background jobs and sessions opened elsewhere then carry the hooks too.
+- Prefer the marketplace install over `--plugin-dir`; if `--plugin-dir` is used for development, point it at the current checkout and restart the session after moving it.
+- Before an apply, prove the guard is present: a harmless command containing the text `approve-apply` (for example `echo approve-apply-probe`) must be **blocked** (plugin ≥ 0.13.3; earlier versions only denied it when the command also contained `terraform`, which also let a lone `bash scripts/approve-apply.sh <plan>` through: fixed the same day). If it prints, the hooks are not loaded; stop and fix the session first.
+- After an allowed apply, `.slipway/approvals/` must be empty; a leftover token means the guard did not run.
+
+## 5. `guard-admin-actions.sh` — administration and secrets stay behind a human (added 2026-09-20)
+| | |
+|---|---|
+| **Runs** | `PreToolUse`, matchers `Bash` and `Read` |
+| **Forces a prompt (attended) / denies (unattended)** | `setup-azure.sh --apply`, `cloud-setup.sh --apply`; `gh api` writes (POST/PUT/PATCH/DELETE or `-f/--input`) on `…/environments…`, `…/rulesets…`, `…/branches/*/protection`, `…/pending_deployments` (deployment approval under the human's account), `…/actions/secrets|variables`; `gh secret set`, `gh variable set` |
+| **Denies always** | printing or reading the seed file `.slipway/.env` (`cat`, `grep`, `Read`, …; sourcing with `.`/`source` is allowed), bare `env` / `printenv` / `export -p` / `set` (would dump sourced secrets), `echo`/`printf` of a variable named `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*_KEY`, `*APIKEY*` |
+| **Why** | The end user approves administrative actions in the session (the prompt names the action, the answer is the approval) instead of running scripts in a second terminal; secret values never enter the transcript. `CLAUDE_CODE_SESSION_ATTENDED` is not documented: absence fails safe (deny) |

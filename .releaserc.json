@@ -1,15 +1,47 @@
 {
-  "branches": ["main"],
+  "branches": [
+    "main",
+    {
+      "name": "next",
+      "prerelease": true
+    }
+  ],
   "tagFormat": "v${version}",
   "plugins": [
-    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
-    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
-    ["@semantic-release/changelog", { "changelogFile": "plugins/adlc/CHANGELOG.md" }],
-    ["@semantic-release/exec", { "prepareCmd": "bash scripts/release/set-plugin-version.sh ${nextRelease.version}" }],
-    ["@semantic-release/git", {
-      "assets": ["plugins/adlc/CHANGELOG.md", "plugins/adlc/.claude-plugin/plugin.json"],
-      "message": "chore(release): v${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
-    }],
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "plugins/slipway/CHANGELOG.md"
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "bash scripts/release/set-plugin-version.sh ${nextRelease.version}"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "plugins/slipway/CHANGELOG.md",
+          "plugins/slipway/.claude-plugin/plugin.json"
+        ],
+        "message": "chore(release): v${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
     "@semantic-release/github"
   ]
 }

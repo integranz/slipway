@@ -3,7 +3,7 @@
 # PLUGIN_MANIFEST may override the manifest path (used by the CI self-test).
 set -euo pipefail
 version="${1:?usage: set-plugin-version.sh <semver>}"
-manifest="${PLUGIN_MANIFEST:-$(cd "$(dirname "$0")/../.." && pwd)/plugins/adlc/.claude-plugin/plugin.json}"
+manifest="${PLUGIN_MANIFEST:-$(cd "$(dirname "$0")/../.." && pwd)/plugins/slipway/.claude-plugin/plugin.json}"
 [ -f "$manifest" ] || { echo "manifest not found: $manifest" >&2; exit 1; }
 # node -e: extra arguments start at process.argv[1] (there is no script path)
 node -e '

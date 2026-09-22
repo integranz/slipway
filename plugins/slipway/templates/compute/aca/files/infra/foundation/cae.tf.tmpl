@@ -1,0 +1,13 @@
+# Container Apps environment (compute option aca), shared by every app. Each app is a container app in its own root module
+# infra/apps/<app>, which looks this environment up by name. Rendered from templates/compute/aca/files/infra/foundation.
+resource "azurerm_container_app_environment" "this" {
+  name                       = "cae-<% project.name %>-<% derived.env %>"
+  location                   = data.azurerm_resource_group.env.location
+  resource_group_name        = data.azurerm_resource_group.env.name
+  logs_destination           = "log-analytics"
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
+  tags                       = local.tags
+}
+
+output "container_app_environment_id" { value = azurerm_container_app_environment.this.id }
+output "container_app_environment_default_domain" { value = azurerm_container_app_environment.this.default_domain }

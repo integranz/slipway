@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/Nerdbank.GitVersioning/main/src/NerdBank.GitVersioning/version.schema.json",
+  "version": "<% app.initial_version %>",
+  "publicReleaseRefSpec": [
+    "^refs/heads/<% github.default_branch %>$"
+  ],
+  "cloudBuild": {
+    "buildNumber": { "enabled": true },
+    "setVersionVariables": true
+  },
+  "pathFilters": [
+<%#each app.path_filters%>    "<% this %>"<%#if @last%><%else%>,<%/if%>
+<%/each%>  ],
+  "release": {
+    "tagName": "<% app.tag_name_format %>",
+    "branchName": "<% app.release_branch_format %>",
+    "versionIncrement": "minor",
+    "firstUnstableTag": "alpha"
+  }
+}

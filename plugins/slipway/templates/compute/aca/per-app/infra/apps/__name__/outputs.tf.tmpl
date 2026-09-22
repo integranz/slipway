@@ -1,0 +1,6 @@
+output "image_tag" { value = var.image_tag }
+output "name" { value = azurerm_container_app.this.name }
+output "latest_revision" { value = azurerm_container_app.this.latest_revision_name }<%#if app.has_ingress%>
+output "fqdn" { value = azurerm_container_app.this.ingress[0].fqdn }
+output "url" { value = "https://${azurerm_container_app.this.ingress[0].fqdn}" }
+output "health_url" { value = "https://${azurerm_container_app.this.ingress[0].fqdn}<% app.health_path %>" }<%/if%>

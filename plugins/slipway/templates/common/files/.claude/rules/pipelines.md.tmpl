@@ -1,0 +1,17 @@
+---
+paths:
+  - ".github/workflows/**"
+---
+# Pipeline rules (<% derived.option_labels.runner %>)
+
+- One CI and one CD workflow **per app**, named `<% derived.pipelines.name_prefix %>-<app>-ci` and `<% derived.pipelines.name_prefix %>-<app>-cd`; both are thin callers of the shared reusable workflows `_ci.yml` and `_cd.yml` (`workflow_call`). Never combine apps in one workflow.
+- Triggers are path-filtered: `on.push.paths` (and `on.pull_request.paths` with `pr_checks=path-filtered`) list exactly the app's inputs from `.slipway/config.yaml` (its path, declared `paths`, `shared_paths`, the four workflow files, `infra/apps/<app>`). The same list is the `pathFilters` of the app's `version.json`; `/slipway:verify` refutes a deployment when they disagree. Change the list in the config and re-scaffold, never in the workflow.
+<%#eq options.pr_checks "always-run-gate"%>- On pull requests every app CI starts and its `<app> changes` job decides whether the rest runs (a conditionally skipped job counts as passed), so the per-app checks may be required on `<% github.default_branch %>`: require exactly `<app> changes` and `<app> ci` per app. `<app> ci` is the always-running result job (success when the app was built or skipped, failure otherwise); the nested `<app> / test` and `<app> / image` checks do not exist when the app is skipped and must not be required.
+<%else%>- With `pr_checks=path-filtered` a pull request that does not touch an app never starts that app's CI; do **not** require per-app checks on `<% github.default_branch %>` (a skipped workflow stays Pending and blocks the merge). Switch to `pr_checks=always-run-gate` first.
+<%/eq%>- CI builds and tests on pull requests without pushing anything; only pushes to `<% github.default_branch %>` push `<% derived.registry_host %>/<repo>:<semver>`, create the git tag `<app>/v<semver>` and publish `release-manifest-<app>-<semver>`.
+<%#eq options.cd_trigger "on-ci-success"%>- CD starts automatically when the app's CI succeeds on `<% github.default_branch %>` (`workflow_run`; the tag is read from that run's release manifest, since `workflow_run` cannot carry inputs) and targets `<% github.cd_environment %>`; other environments and re-deploys use `/slipway:deploy <app> <tag> <env>`.
+<%else%>- CD is started only by `/slipway:deploy <app> <tag> <env>` (`workflow_dispatch` with `tag` and `environment` inputs).
+<%/eq%>- CD applies `infra/apps/<app>` behind the GitHub Environment approval; no other job runs `terraform apply`, and one app's CD never touches another app's state.
+- Cloud authentication is OIDC federated credentials (`azure/login` with `id-token: write`); no client secrets in repository secrets.
+- Every pushed image tag is immutable and traceable to a commit (`sha-<short>` alias allowed alongside the semver).
+- Cloud identity in workflows comes only from the repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` (exported to Terraform as `ARM_CLIENT_ID`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID` with `ARM_USE_OIDC=true`, `ARM_USE_AZUREAD=true`). Hardened base images are pulled after `docker/login-action` with `registry: dhi.io`, `username: ${{ vars.DOCKERHUB_USERNAME }}`, `password: ${{ secrets.DOCKERHUB_TOKEN }}`. No other credentials exist; see `.slipway/SETUP.md`.

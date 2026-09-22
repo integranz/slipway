@@ -2,7 +2,7 @@ name: plugin-ci
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, next]
 permissions:
   contents: read
 jobs:
@@ -27,14 +27,14 @@ jobs:
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck >/dev/null
-          shellcheck -S warning plugins/adlc/hooks/*.sh plugins/adlc/scripts/*.sh scripts/release/*.sh
+          shellcheck -S warning plugins/slipway/hooks/*.sh plugins/slipway/scripts/*.sh scripts/release/*.sh
       - name: Shell syntax
         run: |
           shopt -s nullglob
-          for f in scripts/**/*.sh plugins/adlc/hooks/*.sh plugins/adlc/scripts/*.sh; do bash -n "$f"; done
+          for f in scripts/**/*.sh plugins/slipway/hooks/*.sh plugins/slipway/scripts/*.sh; do bash -n "$f"; done
       - name: Release bump script self-test
         run: |
-          tmp="$(mktemp)"; cp plugins/adlc/.claude-plugin/plugin.json "$tmp"
+          tmp="$(mktemp)"; cp plugins/slipway/.claude-plugin/plugin.json "$tmp"
           PLUGIN_MANIFEST="$tmp" bash scripts/release/set-plugin-version.sh 9.9.9
           grep -q '"version": "9.9.9"' "$tmp"
       - name: Unit and integration tests (renderer, scaffold)

@@ -1,15 +1,15 @@
-# adlc marketplace
+# slipway marketplace
 
-Source and marketplace for the **adlc** (Agentic Delivery Lifecycle) Claude Code plugin.
+Source and marketplace for the **slipway** (Agentic Delivery Lifecycle) Claude Code plugin.
 
-- Plugin: [`plugins/adlc`](plugins/adlc/README.md)
-- Option registry: [`plugins/adlc/templates/common/adlc/options.yaml`](plugins/adlc/templates/common/adlc/options.yaml)
+- Plugin: [`plugins/slipway`](plugins/slipway/README.md)
+- Option registry: [`plugins/slipway/templates/common/slipway/options.yaml`](plugins/slipway/templates/common/slipway/options.yaml)
 - Goal evidence docs: [`docs/`](docs/)
 
 ## Use the marketplace
 ```
-/plugin marketplace add integranz/adlc
-/plugin install adlc@adlc-marketplace
+/plugin marketplace add integranz/slipway
+/plugin install slipway@slipway-marketplace
 ```
 
 ## Develop
@@ -18,8 +18,8 @@ npm ci
 npm run validate:config-example
 npm run validate:plugin        # needs the claude CLI
 npm test                       # renderer + scaffold integration + 72 hook cases
-node plugins/adlc/scripts/options.cjs            # what the interview offers
-node plugins/adlc/scripts/scaffold.cjs --repo <target> --dry-run
-claude --plugin-dir ./plugins/adlc
+node plugins/slipway/scripts/options.cjs            # what the interview offers
+node plugins/slipway/scripts/scaffold.cjs --repo <target> --dry-run
+claude --plugin-dir ./plugins/slipway
 ```
-Releases: semantic-release on `main` from Conventional Commits; `plugins/adlc/.claude-plugin/plugin.json` and `plugins/adlc/CHANGELOG.md` are updated automatically.
+Releases: semantic-release on `main` from Conventional Commits; `plugins/slipway/.claude-plugin/plugin.json` and `plugins/slipway/CHANGELOG.md` are updated automatically.

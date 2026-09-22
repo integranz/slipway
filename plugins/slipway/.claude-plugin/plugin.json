@@ -1,0 +1,20 @@
+{
+  "name": "slipway",
+  "version": "1.0.1",
+  "description": "slipway implements the Agentic Delivery Lifecycle (ADLC): interview-driven repo intake, app classification, hardened Dockerfiles, Terraform on Azure, GitHub Actions CI/CD with immutable tags, deployment verification and Jira tracking. Every platform choice is an interview option.",
+  "author": {
+    "name": "Abdelazim Ali"
+  },
+  "keywords": [
+    "devops",
+    "azure",
+    "terraform",
+    "github-actions",
+    "docker",
+    "jira",
+    "delivery"
+  ],
+  "license": "MIT",
+  "repository": "https://github.com/integranz/slipway",
+  "homepage": "https://github.com/integranz/slipway/tree/main/plugins/slipway"
+}

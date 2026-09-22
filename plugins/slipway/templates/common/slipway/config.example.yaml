@@ -1,0 +1,87 @@
+# .slipway/config.yaml — written by /slipway:bootstrap, read by every other slipway skill.
+# Values below are the adlc-demo defaults; replace identifiers with your own.
+schema_version: 1
+
+project:
+  name: adlc-demo
+  description: Demo monorepo (.NET 8 API + React/Vite frontend) delivered by the slipway plugin
+
+options:
+  cloud: azure
+  compute: aca
+  registry: acr
+  runner: github-actions
+  versioning: nbgv
+  branching: trunk
+  tracker: jira
+  secret_store: azure-key-vault
+  base_image: dhi
+  cd_trigger: on-ci-success   # optional (default manual): <prefix>-<app>-cd also starts when <prefix>-<app>-ci succeeds on main
+  pr_checks: always-run-gate  # optional (default path-filtered): per-app CI checks are safe to require on the branch
+  cd_approval: in-session     # optional (default github-ui): /slipway:deploy may approve the pending deployment via the GitHub API after you confirm
+
+azure:
+  # subscription_id / tenant_id are optional: omit them and set ARM_SUBSCRIPTION_ID / ARM_TENANT_ID
+  # (locally via `az account set`, in CI via GitHub secrets AZURE_SUBSCRIPTION_ID / AZURE_TENANT_ID).
+  location: westeurope
+  resource_group: rg-adlc-demo-dev
+  acr_name: acradlcdemo
+  key_vault_name: kv-adlc-demo-dev
+  identity_name: id-adlc-demo-dev
+  state:
+    resource_group: rg-slipway-tfstate
+    storage_account: stadlctfstate
+    container: tfstate
+
+github:
+  owner: integranz
+  repo: slipway-demo
+  default_branch: main
+  cd_environment: dev
+
+# Tracking model: epic (optional, yours) -> one Story per delivery (onboarding, then one per change request) -> one Subtask
+# per unit of work (bootstrap, dockerize <app>, foundation <env>, deploy <app> <tag> -> <env>). Skills keep the subtasks current;
+# the story closes itself when every subtask is done. options.tracker: none disables all of this; an unreachable Jira never blocks.
+jira:
+  site_url: https://integranz.atlassian.net
+  project_key: ADLC
+  issue_type: Story
+  # epic_key: ADLC-1        # optional: parent epic of the story
+  # story_key: ADLC-12      # current story; written by /slipway:ticket story create|set, change it for a new change request
+  subtask_issue_type: Subtask
+  transitions:
+    start: In Progress
+    review: In Review
+    done: Done
+
+environments: [dev]
+
+# One CI and one CD workflow per app: <name_prefix>-<app>-ci / <name_prefix>-<app>-cd (default prefix: github.repo).
+pipelines:
+  name_prefix: slipway-demo
+# Repository-level inputs of every app (the shared workflow files _ci.yml/_cd.yml are added automatically).
+shared_paths: []
+
+apps:
+  - name: api
+    path: apps/api
+    kind: api
+    stack: dotnet8-api
+    port: 8080
+    health_path: /health
+    test_command: dotnet test apps/api
+    image_repository: adlc-demo/api
+    paths: [libs/dotnet/Demo.Contracts]   # shared library referenced by the API (detected from ProjectReferences too)
+    version: "0.2"                        # initial version for apps/api/version.json (never rewritten)
+  - name: web
+    path: apps/web
+    kind: frontend
+    stack: react-vite
+    port: 8080
+    health_path: /
+    test_command: npm --prefix apps/web test
+    image_repository: adlc-demo/web
+    upstreams: [api]
+    version: "0.2"
+
+cursor_mirror: false

@@ -1,9 +1,0 @@
-output "image_tag" { value = var.image_tag }
-output "environment_default_domain" { value = azurerm_container_app_environment.this.default_domain }
-<%#each derived.apps%>
-output "<% name %>_name" { value = azurerm_container_app.<% name %>.name }
-output "<% name %>_latest_revision" { value = azurerm_container_app.<% name %>.latest_revision_name }
-<%#if has_ingress%>output "<% name %>_fqdn" { value = azurerm_container_app.<% name %>.ingress[0].fqdn }
-output "<% name %>_url" { value = "https://${azurerm_container_app.<% name %>.ingress[0].fqdn}" }
-output "<% name %>_health_url" { value = "https://${azurerm_container_app.<% name %>.ingress[0].fqdn}<% health_path %>" }
-<%/if%><%/each%>

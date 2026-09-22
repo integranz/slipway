@@ -3,12 +3,12 @@
 const fs = require("node:fs"), path = require("node:path");
 const Ajv2020 = require("ajv/dist/2020");
 const standalone = require("ajv/dist/standalone").default;
-const base = path.join(__dirname, "..", "plugins", "adlc");
-const schema = JSON.parse(fs.readFileSync(path.join(base, "templates/common/adlc/config.schema.json"), "utf8"));
+const base = path.join(__dirname, "..", "plugins", "slipway");
+const schema = JSON.parse(fs.readFileSync(path.join(base, "templates/common/slipway/config.schema.json"), "utf8"));
 const ajv = new Ajv2020({ code: { source: true, esm: false }, strict: true, strictRequired: false, allErrors: true });
 const validate = ajv.compile(schema);
 let code = standalone(ajv, validate);
-const header = `// GENERATED FILE - do not edit. Source: templates/common/adlc/config.schema.json. Rebuild: node scripts/build-validator.cjs\n`;
+const header = `// GENERATED FILE - do not edit. Source: templates/common/slipway/config.schema.json. Rebuild: node scripts/build-validator.cjs\n`;
 const out = path.join(base, "scripts/lib/validate-config.generated.cjs");
 fs.writeFileSync(out, header + code);
 const deps = [...code.matchAll(/require\(([^)]+)\)/g)].map(m => m[1]);

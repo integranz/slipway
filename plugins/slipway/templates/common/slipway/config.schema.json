@@ -1,0 +1,638 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/slipway/plugins/slipway/templates/common/slipway/config.schema.json",
+  "title": "ADLC repository configuration (.slipway/config.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project",
+    "options",
+    "environments",
+    "apps"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,38}$"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cloud",
+        "compute",
+        "registry",
+        "runner",
+        "versioning",
+        "branching",
+        "tracker",
+        "secret_store",
+        "base_image"
+      ],
+      "properties": {
+        "cloud": {
+          "enum": [
+            "azure",
+            "aws",
+            "gcp"
+          ]
+        },
+        "compute": {
+          "enum": [
+            "aca",
+            "aci",
+            "aks",
+            "app-service"
+          ]
+        },
+        "registry": {
+          "enum": [
+            "acr",
+            "ghcr",
+            "ecr",
+            "gar"
+          ]
+        },
+        "runner": {
+          "enum": [
+            "github-actions",
+            "azure-pipelines",
+            "gitlab-ci"
+          ]
+        },
+        "versioning": {
+          "enum": [
+            "nbgv",
+            "semantic-release"
+          ]
+        },
+        "branching": {
+          "enum": [
+            "trunk",
+            "gitflow"
+          ]
+        },
+        "tracker": {
+          "enum": [
+            "jira",
+            "none",
+            "asana",
+            "azure-devops"
+          ]
+        },
+        "secret_store": {
+          "enum": [
+            "azure-key-vault",
+            "aws-secrets-manager",
+            "gcp-secret-manager"
+          ]
+        },
+        "base_image": {
+          "enum": [
+            "dhi",
+            "mcr-chiseled",
+            "chainguard",
+            "alpine"
+          ]
+        },
+        "cd_trigger": {
+          "enum": [
+            "manual",
+            "on-ci-success"
+          ],
+          "description": "Optional (default manual). on-ci-success: <prefix>-<app>-cd also runs on workflow_run of <prefix>-<app>-ci on the default branch."
+        },
+        "pr_checks": {
+          "enum": [
+            "path-filtered",
+            "always-run-gate"
+          ],
+          "description": "Optional (default path-filtered). always-run-gate makes per-app CI checks safe to require on the branch."
+        },
+        "cd_approval": {
+          "enum": [
+            "github-ui",
+            "in-session"
+          ],
+          "description": "Optional (default github-ui). in-session lets /slipway:deploy approve the pending deployment through the GitHub API after the human confirms the plan, recorded under the human's account."
+        },
+        "config_store": {
+          "enum": [
+            "env",
+            "app-configuration"
+          ],
+          "description": "Optional (default env)."
+        },
+        "database": {
+          "enum": [
+            "none",
+            "azure-postgresql-flexible"
+          ],
+          "description": "Optional (default none)."
+        }
+      }
+    },
+    "azure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "location",
+        "resource_group",
+        "acr_name",
+        "key_vault_name",
+        "state"
+      ],
+      "properties": {
+        "subscription_id": {
+          "type": "string",
+          "description": "Optional. When omitted, tooling reads ARM_SUBSCRIPTION_ID / AZURE_SUBSCRIPTION_ID (locally from az account, in CI from GitHub secrets). Keep identifiers out of committed config when the repo is public.",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "tenant_id": {
+          "type": "string",
+          "description": "Optional. When omitted, tooling reads ARM_TENANT_ID / AZURE_TENANT_ID.",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "location": {
+          "type": "string"
+        },
+        "resource_group": {
+          "type": "string"
+        },
+        "acr_name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9]{5,50}$"
+        },
+        "key_vault_name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$"
+        },
+        "identity_name": {
+          "type": "string"
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "storage_account",
+            "container"
+          ],
+          "properties": {
+            "resource_group": {
+              "type": "string"
+            },
+            "storage_account": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{3,24}$"
+            },
+            "container": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "github": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "owner",
+        "repo"
+      ],
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "default_branch": {
+          "type": "string",
+          "default": "main"
+        },
+        "cd_environment": {
+          "type": "string",
+          "default": "dev"
+        }
+      }
+    },
+    "jira": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "site_url",
+        "project_key"
+      ],
+      "properties": {
+        "site_url": {
+          "type": "string",
+          "pattern": "^https://[a-z0-9-]+\\.atlassian\\.net/?$"
+        },
+        "project_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,9}$"
+        },
+        "issue_type": {
+          "type": "string",
+          "default": "Story"
+        },
+        "transitions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "start": {
+              "type": "string",
+              "default": "In Progress"
+            },
+            "review": {
+              "type": "string",
+              "default": "In Review"
+            },
+            "done": {
+              "type": "string",
+              "default": "Done"
+            }
+          }
+        },
+        "epic_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,9}-[0-9]+$",
+          "description": "Optional. Epic the delivery story is attached to (parent field). Asked in the interview."
+        },
+        "story_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,9}-[0-9]+$",
+          "description": "Optional. The current delivery story: skills create one subtask per unit of work under it. Written by /slipway:ticket story create|set; change it here for a new change request."
+        },
+        "subtask_issue_type": {
+          "type": "string",
+          "default": "Subtask",
+          "description": "Name of the subtask issue type in this project (team-managed: Subtask; company-managed: Sub-task). Discovered from the project's issue types when not set."
+        }
+      }
+    },
+    "environments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{1,15}$"
+      }
+    },
+    "pipelines": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name_prefix": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,38}$",
+          "description": "Prefix of every workflow name: <prefix>-<app>-ci and <prefix>-<app>-cd (default: github.repo, else project.name)"
+        }
+      }
+    },
+    "shared_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))\\S+$",
+        "description": "Repository-relative path (file or directory), no leading slash, no '..'"
+      },
+      "description": "Repository-level build inputs of every app (for example a root .dockerignore or a shared Directory.Build.props). The shared workflow files are added automatically."
+    },
+    "apps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "stack",
+          "image_repository"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,30}$"
+          },
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "api",
+              "frontend",
+              "worker"
+            ]
+          },
+          "stack": {
+            "enum": [
+              "dotnet8-api",
+              "react-vite",
+              "node-ts-api",
+              "python-api",
+              "custom"
+            ]
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "health_path": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "test_command": {
+            "type": "string"
+          },
+          "image_repository": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$"
+          },
+          "upstreams": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of other apps this app calls (e.g. a frontend proxying /api to the api app)."
+          },
+          "build": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Stack-specific build inputs. Missing values are detected by the scaffold from the app directory (deterministic) and can be pinned here.",
+            "properties": {
+              "project": {
+                "type": "string",
+                "description": "dotnet: path of the .csproj to publish, relative to the app path (default: the single non-test *.csproj found)"
+              },
+              "assembly": {
+                "type": "string",
+                "description": "dotnet: entry assembly name without .dll (default: csproj file name)"
+              },
+              "dist_dir": {
+                "type": "string",
+                "description": "react-vite: build output directory relative to the app path (default: dist)"
+              },
+              "node_version": {
+                "type": "string",
+                "pattern": "^[0-9]+$",
+                "description": "react-vite/node: major Node version for the build stage (default: 22)"
+              },
+              "dotnet_version": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+$",
+                "description": "dotnet: SDK/runtime version tag (default: 8.0)"
+              },
+              "nginx_version": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+$",
+                "description": "react-vite: nginx runtime image tag (default: 1.29)"
+              }
+            }
+          },
+          "secrets": {
+            "type": "array",
+            "description": "Key Vault secrets exposed to the app as environment variables (values are set out of band by a human).",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "env"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]([a-z0-9-]{0,125}[a-z0-9])?$",
+                  "description": "Key Vault secret name"
+                },
+                "env": {
+                  "type": "string",
+                  "pattern": "^[A-Z][A-Z0-9_]*$",
+                  "description": "Environment variable name in the container"
+                }
+              }
+            }
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "pattern": "^[A-Z][A-Z0-9_]*$"
+            },
+            "description": "Non-secret environment variables"
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cpu": {
+                "type": "number",
+                "description": "vCPU (Consumption plan combos: 0.25/0.5Gi, 0.5/1Gi, 0.75/1.5Gi, 1/2Gi, ...)",
+                "default": 0.25
+              },
+              "memory": {
+                "type": "string",
+                "pattern": "^[0-9.]+Gi$",
+                "default": "0.5Gi"
+              }
+            }
+          },
+          "scale": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "min": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 300,
+                "default": 1
+              },
+              "max": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300,
+                "default": 2
+              }
+            }
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))\\S+$",
+              "description": "Repository-relative path (file or directory), no leading slash, no '..'"
+            },
+            "description": "Extra build inputs of this app outside its path (shared libraries). .NET ProjectReferences outside the app path are detected and added automatically."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+            "description": "nbgv: initial 'version' written to <app path>/version.json the first time it is generated (default 0.1). Never rewritten afterwards."
+          },
+          "test_services": {
+            "type": "array",
+            "description": "Service containers started next to this app's tests in CI (GitHub Actions `services`), for example a PostgreSQL for integration tests.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "image"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                },
+                "image": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535,
+                  "description": "Container port published on the same host port"
+                },
+                "env": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "propertyNames": {
+                    "pattern": "^[A-Z][A-Z0-9_]*$"
+                  }
+                },
+                "health_cmd": {
+                  "type": "string",
+                  "description": "Command for the container health check, e.g. pg_isready -U taskflow"
+                }
+              }
+            }
+          },
+          "test_env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "pattern": "^[A-Z][A-Z0-9_]*$"
+            },
+            "description": "Environment variables for the test step in CI (non-secret; e.g. DATABASE_URL pointing at a test service)."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "api",
+                    "frontend"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "then": {
+              "required": [
+                "port",
+                "health_path"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "cursor_mirror": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "options": {
+            "properties": {
+              "cloud": {
+                "const": "azure"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "required": [
+          "azure"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "options": {
+            "properties": {
+              "runner": {
+                "const": "github-actions"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "required": [
+          "github"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "options": {
+            "properties": {
+              "tracker": {
+                "const": "jira"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "required": [
+          "jira"
+        ]
+      }
+    }
+  ]
+}

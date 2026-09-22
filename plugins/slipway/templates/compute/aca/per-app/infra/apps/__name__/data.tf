@@ -1,0 +1,24 @@
+# Everything below is created by infra/foundation (or setup-azure.sh) and looked up by name.
+data "azurerm_resource_group" "env" {
+  name = local.resource_group_name
+}
+
+data "azurerm_container_registry" "this" {
+  name                = local.acr_name
+  resource_group_name = local.resource_group_name
+}
+
+data "azurerm_user_assigned_identity" "apps" {
+  name                = local.identity_name
+  resource_group_name = local.resource_group_name
+}
+
+data "azurerm_key_vault" "this" {
+  name                = local.key_vault_name
+  resource_group_name = local.resource_group_name
+}
+
+data "azurerm_container_app_environment" "this" {
+  name                = local.cae_name
+  resource_group_name = local.resource_group_name
+}

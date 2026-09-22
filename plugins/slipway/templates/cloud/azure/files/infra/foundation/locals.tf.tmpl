@@ -1,0 +1,20 @@
+# Values rendered from .slipway/config.yaml. Change them with /slipway:bootstrap, then re-scaffold.
+locals {
+  project     = "<% project.name %>"
+  environment = "<% derived.env %>"
+  location    = "<% azure.location %>"
+
+  resource_group_name = "<% azure.resource_group %>"
+  acr_name            = "<% azure.acr_name %>"
+  key_vault_name      = "<% azure.key_vault_name %>"
+  identity_name       = "<% azure.identity_name %>"
+  log_analytics_name  = "log-<% project.name %>-<% derived.env %>"
+  cicd_principal_name = "sp-<% project.name %>-github" # created by .slipway/setup-azure.sh
+
+  tags = {
+    project     = local.project
+    environment = local.environment
+    managed_by  = "terraform"
+    generator   = "slipway"
+  }
+}

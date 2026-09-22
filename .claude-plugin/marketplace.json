@@ -1,16 +1,16 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "adlc-marketplace",
+  "name": "slipway-marketplace",
   "description": "Marketplace for the ADLC (Agentic Delivery Lifecycle) plugin: repo intake, containerisation, Terraform, CI/CD, deployment verification and work tracking driven from Claude Code.",
   "owner": {
     "name": "Abdelazim Ali"
   },
   "plugins": [
     {
-      "name": "adlc",
+      "name": "slipway",
       "description": "Agentic Delivery Lifecycle: interview-driven intake of a repo, app classification, hardened multi-stage Dockerfiles, Terraform (Azure), GitHub Actions CI/CD with immutable tags, deployment verification and Jira tracking. Option-based: cloud, compute, registry, runner, versioning, branching, tracker and secret store are chosen per repo.",
       "author": { "name": "Abdelazim Ali" },
-      "source": "./plugins/adlc",
+      "source": "./plugins/slipway",
       "category": "development"
     }
   ]

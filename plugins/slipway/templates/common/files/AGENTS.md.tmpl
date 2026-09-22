@@ -1,0 +1,87 @@
+# AGENTS.md — start here (<% project.name %>)
+
+<%#if project.description%><% project.description %>
+
+<%/if%>This repository is delivered by the **slipway** Claude Code plugin (<% derived.plugin_version %>). This file is the routing page for humans and agents: what is here, which skill to run, which rules apply. Procedures live in the plugin's skills, not here.
+
+## Layout
+| App | Path | Kind | Stack | Port | Health |
+|---|---|---|---|---|---|
+<%#each derived.apps%>| `<% name %>` | `<% path %>` | <% kind %> | <% stack %> | <%#if port%><% port %><%else%>—<%/if%> | <%#if health_path%>`<% health_path %>`<%else%>—<%/if%> |
+<%/each%>
+
+| Path | Purpose |
+|---|---|
+| `.slipway/config.yaml` | Delivery options and app inventory (source of truth for every slipway skill) |
+| `.slipway/SETUP.md`, `.slipway/setup-azure.sh` | Prerequisites: what a human does (logins, Docker Hub token, MCP grant) and what `/slipway:launch` automates behind permission prompts (Entra app + OIDC, state storage, RBAC, secrets, environment, ruleset) |
+| `.slipway/.env.example` | Seed file template for local secrets; the copy `.slipway/.env` is gitignored, only ever sourced, never printed |
+| `.slipway/evidence/<app>/` | Verification records per app and deployed tag |
+| `infra/foundation/` | Shared cloud resources (registry, key vault, identity, logs<%#eq options.compute "aca"%>, Container Apps environment<%/eq%>). Applied by a human after `/slipway:plan`; never by an agent alone |
+<%#each derived.apps%>| `<% infra_dir %>/` | Compute + image tag of `<% name %>` only (own state). Applied only by `<% workflow_cd %>` behind the environment approval |
+<%/each%>| `.github/workflows/_ci.yml`, `_cd.yml` | Shared CI / CD stages (`workflow_call`), used by every app's thin workflows below |
+<%#each derived.apps%>| `.github/workflows/<% workflow_ci %>.yml` | CI of `<% name %>`: version from `<% version_file %>`, test, image, tag `<% tag_prefix %><semver>`. Runs only when its inputs change |
+| `.github/workflows/<% workflow_cd %>.yml` | CD of `<% name %>`: plan, human approval, apply `<% infra_dir %>`, smoke test<%#if derived.pipelines.auto_cd%>; starts automatically after a green CI on `<% github.default_branch %>`<%/if%> |
+<%/each%>| `compose.yaml` | Local run of all app images as built for the cloud (frontends use `nginx.local.conf`) |
+| `.claude/rules/` | Path-scoped rules (see Rules below) |
+
+## Pipelines (one CI and one CD per app)
+| App | CI workflow | CD workflow | Version file | Git tag | Inputs (triggers = version pathFilters) |
+|---|---|---|---|---|---|
+<%#each derived.apps%>| `<% name %>` | `<% workflow_ci %>` | `<% workflow_cd %>` | `<% version_file %>` | `<% tag_prefix %><semver>` | <%#each pipeline_paths%>`<% this %>`<%#if @last%><%else%>, <%/if%><%/each%> |
+<%/each%>A change to a path listed for one app only builds, versions and deploys that app; a path listed for several apps (shared inputs) triggers each of them. CD trigger: `<% options.cd_trigger %>`; pull-request behaviour: `<% options.pr_checks %>` (see `.claude/rules/pipelines.md`).
+
+## Delivery options chosen
+| Dimension | Option |
+|---|---|
+<%#each derived.option_rows%>| <% dimension %> | `<% option %>` — <% label %> |
+<%/each%>
+Change an option with `/slipway:bootstrap`; do not edit generated files by hand to switch options.
+
+## I want to…
+| Goal | Run |
+|---|---|
+| Do everything end to end, resumable (preflight → bootstrap → cloud and GitHub prerequisites → images → foundation → CI/CD → verify → tracking) | `/slipway:launch` |
+| Onboard or change delivery options | `/slipway:bootstrap` |
+| Build and smoke-test one app image locally | `/slipway:dockerize <app path>` |
+| Run every app image together locally | `VERSION=$(nbgv get-version -v SemVer2) docker compose up --build` (see `compose.yaml`) |
+| See what infrastructure would change | `/slipway:plan <env> --layer foundation\|apps/<app>` |
+| Deploy a released tag of one app | `/slipway:deploy <app> <tag> <env>` |
+| Prove a deployment is correct | `/slipway:verify <app> <env> <tag>` |
+| Track the work | `/slipway:ticket show` (story + subtasks), `story create\|set`, `subtask start\|review\|done "<title>"`, `sync` |
+| Understand the repo before changing it | ask for the `explore` sub-agent |
+| Make a scoped change with proof | ask for the `execute` sub-agent with an acceptance command |
+| Check claims independently | ask for the `verify` sub-agent |
+
+## Skills
+<available_skills>
+- slipway:launch — the whole delivery in one command; stops only for human decisions and approvals
+- slipway:bootstrap — intake interview, app classification, scaffold, cloud prerequisites, ticket
+- slipway:dockerize — hardened multi-stage Dockerfile for one app, built and health-checked
+- slipway:plan — terraform fmt/validate/plan for one layer; never applies
+- slipway:deploy — trigger and monitor CD for an immutable tag
+- slipway:verify — falsifiable post-deploy checks; writes .slipway/evidence/<app>/<tag>.md
+- slipway:ticket — epic → story → subtask tracking with read-backs and an offline queue
+- slipway:delivery-knowledge — option reference material (model-invoked)
+</available_skills>
+Skills come from the plugin (`<% derived.marketplace.plugin %>@<% derived.marketplace.name %>`, source `<% derived.marketplace.repo %>`), declared in `.claude/settings.json`. Local sessions install it once with `/plugin install <% derived.marketplace.plugin %>@<% derived.marketplace.name %>`; cloud sessions install it automatically.
+
+## Sub-agents
+`explore` (read-only facts with `path:line` evidence), `execute` (one scoped change + acceptance output), `verify` (CONFIRMED / REFUTED / UNVERIFIABLE per claim). None of them may apply infrastructure, push images or trigger workflows; guard hooks enforce this.
+
+## Systems of record and tool policy
+| Need | Use | Not |
+|---|---|---|
+| Tickets | `/slipway:ticket` (tracker: <% derived.option_labels.tracker %><%#if derived.tracking.story_key%>; story `<% derived.tracking.story_key %>`<%/if%><%#if derived.tracking.epic_key%>, epic `<% derived.tracking.epic_key %>`<%/if%>) | manual browser updates |
+| Pipeline status, logs, trigger CD | GitHub MCP via `/slipway:deploy` / `/slipway:verify` | `gh` for writes |
+| Cloud inventory for verification | Azure MCP (read-only) or `az … show/list` | Azure MCP for changes |
+| Infrastructure changes | Terraform in `infra/*` under the guard hooks | portal, `az … create`, Azure MCP writes |
+| Images | CI pushes `<% derived.registry_host %>/<repo>:<semver>` | `docker push` from a laptop, `latest` tags |
+
+## Rules and precedence
+Non-negotiables are in `CLAUDE.md`. Path-scoped rules are in `.claude/rules/` and load only when matching files are touched: `terraform.md` (`infra/**`), `pipelines.md` (`.github/workflows/**`), `docker.md` (Dockerfiles), `versioning.md`, `branching.md`. Precedence when instructions overlap: managed policy → user (`~/.claude/CLAUDE.md`) → project (`CLAUDE.md`, `.claude/rules/`) → `CLAUDE.local.md`. Hooks from the plugin are mechanical and cannot be relaxed by any of these; see `.claude/rules/precedence.md`.
+
+## Multi-repo
+Open **this repo alone** as the workspace root when working on the apps or their delivery. The plugin repo (`<% derived.marketplace.repo %>`) owns cross-cutting changes (templates, hooks, skills); propose changes there rather than patching generated files here. Keep one `.mcp.json`/MCP policy per repo: this repo relies on the plugin's servers and declares none of its own.
+
+## Other agents
+Cursor reads this file natively and loads skills from `.claude/skills/` when present; the slipway skills live in the plugin, so use Claude Code for slipway workflows unless a mirror is enabled (`cursor_mirror` in `.slipway/config.yaml`).

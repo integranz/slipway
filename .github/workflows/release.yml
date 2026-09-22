@@ -1,7 +1,7 @@
 name: release
 on:
   push:
-    branches: [main]
+    branches: [main, next]
 permissions:
   contents: write
   issues: write
@@ -12,9 +12,18 @@ jobs:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
+      # The release commit and tags are pushed with the slipway-release GitHub App's token: the app is the only bypass
+      # actor of the ruleset that requires pull requests on main, and GitHub's own Actions token cannot bypass rulesets.
+      - name: App token for the release bot
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -23,5 +32,9 @@ jobs:
       - run: npm ci
       - name: semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+          GIT_AUTHOR_NAME: slipway-release[bot]
+          GIT_AUTHOR_EMAIL: slipway-release[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: slipway-release[bot]
+          GIT_COMMITTER_EMAIL: slipway-release[bot]@users.noreply.github.com
         run: npx semantic-release
