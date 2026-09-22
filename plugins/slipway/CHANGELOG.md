@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/integranz/slipway/compare/v1.0.0...v1.0.1) (2026-09-22)
+
+### Bug Fixes
+
+* **release:** push release commits and tags with the slipway-release app token ([43d1bab](https://github.com/integranz/slipway/commit/43d1bab2f1a3381b5afe48d49f6729e0dde07c19))
+
 ## [1.0.0](https://github.com/integranz/slipway/compare/v0.16.1...v1.0.0) (2026-09-21)
 
 ### ⚠ BREAKING CHANGES
