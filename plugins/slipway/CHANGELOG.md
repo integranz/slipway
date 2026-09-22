@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/integranz/slipway/compare/v1.0.1...v1.1.0) (2026-09-22)
+
+### Features
+
+* **cursor:** slipway installs as a Cursor plugin ([#4](https://github.com/integranz/slipway/issues/4)) ([062803b](https://github.com/integranz/slipway/commit/062803b95543bb7bac474da6f1f1689fa81fd5aa))
+
 ## [1.0.1](https://github.com/integranz/slipway/compare/v1.0.0...v1.0.1) (2026-09-22)
 
 ### Bug Fixes
