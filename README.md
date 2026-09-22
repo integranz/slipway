@@ -48,7 +48,7 @@ Cursor 3.21 does not load hooks from an installed plugin (they sit behind a feat
 
 **Commands** — Cursor has no plugin namespace, so the skills are `/launch`, `/bootstrap`, `/dockerize <app>`, `/plan <env> --layer …`, `/deploy <app> <tag> <env>`, `/verify <app> <env> <tag>` and `/ticket …` with the same arguments as the `/slipway:` commands below. A session-start hook tells the agent where the plugin lives; skill scripts run from that path.
 
-**Check the guards are loaded** exactly as in Claude Code: in an Agent session, `echo approve-apply-probe` must be **blocked** (the message starts with `slipway guard:`). If it prints, the hooks are not active: run `npm run install:cursor-local`, reload the window, and look at the *Hooks* output channel; do nothing sensitive in that session.
+**Check the guards are loaded**: in an Agent session ask *"run this in the terminal and show me the output: `echo approve-apply-probe && date`"*. The command must be **blocked** (the message starts with `slipway guard:`). The `&& date` part matters: a model that merely answers the text `approve-apply-probe` without running a terminal command has not exercised the hook at all (seen on 22 Sep). If the command really runs and prints, the hooks are not active: run `npm run install:cursor-local`, look at the *Hooks* output channel (`Loaded 5 user hook(s)` must appear), and do nothing sensitive in that session.
 
 **What differs in Cursor**
 | Topic | Claude Code | Cursor |
@@ -125,7 +125,7 @@ Details, defaults and safety notes per command: `docs/COMMAND-CATALOG.md`.
 | CI refuses "already exists in registry" on the first attempt | re-running a release build for an existing version | make a new commit; only a re-run of the same run may reuse a tag |
 | Two plugin versions in `claude plugin list` | user and project scopes | update both (see Install) |
 | Cursor: slipway missing from Settings → Plugins after `install:cursor-local` | window not reloaded, or local plugin imports disabled by the team admin | *Developer: Reload Window*; ask the admin to allow local plugin imports, or use the team marketplace import |
-| Cursor: `echo approve-apply-probe` prints | hooks not registered: Cursor 3.21 loads no plugin hooks, and `~/.cursor/hooks.json` has no slipway entries (or the repository has no `.cursor/hooks.json`) | `npm run install:cursor-local`, reload the window, check the *Hooks* output channel for `slipway` |
+| Cursor: the probe prints `approve-apply-probe` | either the model answered the text without running a terminal command (no tool call, so no hook), or the hooks are not registered (Cursor 3.21 loads no plugin hooks) | ask for a real run (`echo approve-apply-probe && date`); check the *Hooks* output channel for `Loaded 5 user hook(s)`; otherwise `npm run install:cursor-local` |
 | Cursor: "apply needs a human approval token" although you are watching | by design: Cursor cannot force a permission prompt from a hook | `bash <plugin-root>/scripts/approve-apply.sh <planfile>` in your terminal, then let the agent retry |
 | Cursor: every shell command is blocked with "guard script missing" or "failed" | adapter cannot find or run the guards (moved folder, no `python3`) | reinstall with `npm run install:cursor-local`; install `python3` |
 
