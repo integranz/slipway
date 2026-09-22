@@ -55,4 +55,4 @@ rsync -a --delete --exclude node_modules "$src/" "$dest/"
 version="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).version)' "$dest/.cursor-plugin/plugin.json")"
 echo "slipway $version installed -> $dest"
 if [ "$hooks" = 1 ]; then merge_hooks install; else echo "hooks: skipped (--no-hooks)"; fi
-echo "Cursor: 'Developer: Reload Window', then in an Agent session ask for: echo approve-apply-probe  -> must be blocked (slipway guard: ...)"
+echo "Cursor reloads hooks.json by itself; reload the window for the plugin components. Then ask an Agent session to run in the terminal: echo approve-apply-probe && date  -> must be blocked (slipway guard: ...)"
