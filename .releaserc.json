@@ -37,7 +37,8 @@
       {
         "assets": [
           "plugins/slipway/CHANGELOG.md",
-          "plugins/slipway/.claude-plugin/plugin.json"
+          "plugins/slipway/.claude-plugin/plugin.json",
+          "plugins/slipway/.cursor-plugin/plugin.json"
         ],
         "message": "chore(release): v${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }

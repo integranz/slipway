@@ -1,6 +1,6 @@
 # Command catalog (goal 3)
 
-Five user-invoked skills (`disable-model-invocation: true`), each with arguments, defaults and a safety note. Invoke as `/slipway:<name>` once the plugin is installed. Status: **5 of 5 implemented and exercised on adlc-demo** (2026-09-14 → 2026-09-16). Since plugin 0.13.0 (2026-09-17) `deploy`, `verify` and `plan --layer apps/<app>` work per app (one CI/CD pair, module and version per app); the per-app arguments are exercised at the demo cutover.
+Five user-invoked skills (`disable-model-invocation: true`), each with arguments, defaults and a safety note. Invoke as `/slipway:<name>` in Claude Code; in Cursor the same skills are `/<name>` (no plugin namespace) with the same arguments. Status: **5 of 5 implemented and exercised on adlc-demo** (2026-09-14 → 2026-09-16). Since plugin 0.13.0 (2026-09-17) `deploy`, `verify` and `plan --layer apps/<app>` work per app (one CI/CD pair, module and version per app); the per-app arguments are exercised at the demo cutover.
 
 | # | Command | Arguments | Defaults | Safety | Status | Example |
 |---|---|---|---|---|---|---|

@@ -1,12 +1,15 @@
 # AGENTS.md — start here (slipway marketplace repo)
 
-This repo is the source of the **slipway** Claude Code plugin and its marketplace. It is also a "repo in scope" for the Q3 2026 upskilling goals, so it follows its own rules.
+This repo is the source of the **slipway** plugin (Claude Code and Cursor) and its marketplaces. It is also a "repo in scope" for the Q3 2026 upskilling goals, so it follows its own rules.
 
 ## Structure
 | Path | What |
 |---|---|
-| `.claude-plugin/marketplace.json` | Marketplace manifest; one plugin entry pointing at `./plugins/slipway` |
-| `plugins/slipway/` | The plugin: `skills/`, `agents/`, `hooks/`, `.mcp.json`, `templates/`, `scripts/` |
+| `.claude-plugin/marketplace.json` | Claude Code marketplace manifest; one plugin entry pointing at `./plugins/slipway` |
+| `.cursor-plugin/marketplace.json` | Cursor marketplace manifest (`pluginRoot: plugins`); same single plugin |
+| `plugins/slipway/` | The plugin: `skills/` (shared by both hosts), `agents/` (Claude Code), `hooks/` (Claude Code guards, the single implementation), `.mcp.json`, `templates/`, `scripts/` |
+| `plugins/slipway/.claude-plugin/plugin.json`, `plugins/slipway/.cursor-plugin/plugin.json` | Host manifests; both carry the release version |
+| `plugins/slipway/cursor/` | Cursor-only assets: `hooks.json` + `hooks/*.sh` (adapters that feed Cursor hook input to the guards), `rules/slipway.mdc` (always-on mapping rule), generated `agents/*.md` and `mcp.json` |
 | `plugins/slipway/scripts/` | `scaffold.cjs` (render templates into a target repo), `validate-config.cjs`, `options.cjs` (what the interview may offer), `approve-apply.sh` (human-only Terraform approval), `lib/` (renderer, vendored js-yaml, generated schema validator) |
 | `plugins/slipway/templates/` | `common/files` always; `<dimension>/<option>/files` per chosen option; `stack/<stack>/app` per app. `.tmpl` files use `<% %>` placeholders (see `templates/README.md`) |
 | `plugins/slipway/templates/common/slipway/options.yaml` | Option registry: what the interview offers and what is implemented |
@@ -15,8 +18,10 @@ This repo is the source of the **slipway** Claude Code plugin and its marketplac
 | `.releaserc.json`, `.github/workflows/release.yml` | This repo versions itself with semantic-release (Conventional Commits) |
 
 ## I want to…
-- **work on a skill** → `plugins/slipway/skills/<name>/SKILL.md`; test with `claude --plugin-dir ./plugins/slipway`
-- **change a guardrail** → `plugins/slipway/hooks/`; run `plugins/slipway/hooks/test-hooks.sh` before committing
+- **work on a skill** → `plugins/slipway/skills/<name>/SKILL.md` (Agent Skills format, loaded by Claude Code and Cursor); test with `claude --plugin-dir ./plugins/slipway`
+- **change a guardrail** → `plugins/slipway/hooks/` (one implementation for both hosts); run `plugins/slipway/hooks/test-hooks.sh` and `plugins/slipway/cursor/hooks/test-cursor-hooks.sh` before committing
+- **change a sub-agent or an MCP server** → edit `plugins/slipway/agents/*.md` or `.mcp.json`, then `npm run build:cursor` (the Cursor copies are generated; CI fails when they are stale)
+- **test in Cursor** → `npm run install:cursor-local`, reload Cursor, `echo approve-apply-probe` must be blocked
 - **add a platform option** → add it to `options.yaml` with `status`, add the enum value to `config.schema.json`, run `npm run build:validator`, add `templates/<dimension>/<option>/files/`, add `skills/delivery-knowledge/references/<dimension>-<option>.md`
 - **change a template** → edit under `plugins/slipway/templates/`, then `npm test` (renderer + scaffold integration + hooks)
 - **release** → merge to `main` with Conventional Commit messages; semantic-release tags and updates `plugins/slipway/CHANGELOG.md`

@@ -1,14 +1,14 @@
-# slipway — the Agentic Delivery Lifecycle plugin for Claude Code
+# slipway — the Agentic Delivery Lifecycle plugin for Claude Code and Cursor
 
-A slipway exists to launch a ship. **slipway** takes a repository from source to a verified, tracked deployment on Azure Container Apps with one command, and keeps every step honest: humans approve every cloud change, secrets never enter the conversation, nothing is claimed without evidence. Version **1.0.x** is the frozen review line; new capabilities land on the `next` channel.
+A slipway exists to launch a ship. **slipway** takes a repository from source to a verified, tracked deployment on Azure Container Apps with one command, and keeps every step honest: humans approve every cloud change, secrets never enter the conversation, nothing is claimed without evidence. Version **1.0** froze the review contents on 2026-09-22; **1.1** adds installation in Cursor without changing what 1.0 delivers.
 
-This repository is both the plugin source (`plugins/slipway`) and its Claude Code marketplace (`.claude-plugin/marketplace.json`). The reference consumer is [`integranz/slipway-demo`](https://github.com/integranz/slipway-demo).
+This repository is the plugin source (`plugins/slipway`) and its marketplace for both hosts: Claude Code reads `.claude-plugin/marketplace.json`, Cursor reads `.cursor-plugin/marketplace.json`; both point at the same plugin directory. The reference consumer is [`integranz/slipway-demo`](https://github.com/integranz/slipway-demo).
 
-- [Install in Claude Code](#install-in-claude-code) · [Use with Cursor](#use-with-cursor) · [Usage guide](#usage-guide) · [Commands](#commands) · [Approvals, secrets, tracking](#approvals-secrets-and-tracking) · [Troubleshooting](#troubleshooting) · [Develop](#develop-and-release)
+- [Install in Claude Code](#install-in-claude-code) · [Install in Cursor](#install-in-cursor) · [Usage guide](#usage-guide) · [Commands](#commands) · [Approvals, secrets, tracking](#approvals-secrets-and-tracking) · [Troubleshooting](#troubleshooting) · [Develop](#develop-and-release)
 
 ## Install in Claude Code
 
-slipway is a Claude Code plugin: skills (`/slipway:…` commands), guard hooks, sub-agents and MCP server declarations. Requirements on the machine: Claude Code, `git`, `gh`, `az`, `docker`, `terraform`, `node`, plus the app toolchains (`dotnet`, `npm`) and `nbgv` for repositories using Nerdbank.GitVersioning.
+In Claude Code, slipway is a plugin with skills (`/slipway:…` commands), guard hooks, sub-agents and MCP server declarations. Requirements on the machine: Claude Code, `git`, `gh`, `az`, `docker`, `terraform`, `node`, plus the app toolchains (`dotnet`, `npm`) and `nbgv` for repositories using Nerdbank.GitVersioning.
 
 **Per user (recommended, covers every session on the machine, background jobs included)**
 ```
@@ -34,23 +34,33 @@ claude plugin update slipway@slipway-marketplace --scope project       # inside 
 
 **Develop against a checkout**: `claude --plugin-dir ./plugins/slipway` (restart the session after moving the checkout; the plugin is loaded at start).
 
-## Use with Cursor
+## Install in Cursor
 
-slipway is not a Cursor plugin, and Cursor does not load Claude Code plugins. What Cursor gets from a slipway repository today:
+slipway is also a Cursor plugin (Cursor Plugin format: `plugins/slipway/.cursor-plugin/plugin.json`). The same skills, the same guard hooks through adapters, read-only `explore`/`verify` and a writing `execute` subagent, the three MCP server declarations, and one always-on rule that maps Claude Code wording (`${CLAUDE_PLUGIN_ROOT}`, `AskUserQuestion`, `Agent`) onto Cursor. Requirements on the machine are the same as for Claude Code, plus `python3` (the hook adapters use it) and `rsync` for the local install script.
 
-| Cursor feature | With slipway | Notes |
+**Team marketplace (Cursor Teams)** — Dashboard → Plugins & MCPs → Team Marketplaces → Add Marketplace → *Import from Repo* with `https://github.com/integranz/slipway`; Cursor finds `.cursor-plugin/marketplace.json` and lists **slipway**. Turn on *Auto Refresh* so a merge to `main` updates the plugin (requires the Cursor GitHub App on the repository; at most one re-index every 10 minutes); otherwise click *Refresh*. Then install the plugin from the marketplace and confirm its components under Settings → Plugins.
+
+**Local folder (any plan, for testing)** — from a checkout:
+```
+npm run install:cursor-local          # copies plugins/slipway to ~/.cursor/plugins/local/slipway
+```
+Reload Cursor (*Developer: Reload Window*) and check Settings → Plugins (or Customize) for slipway's skills, rules, subagents, hooks and MCP servers. Cursor Teams admins must allow *Local Plugin Imports*. Re-run the script after every change; remove with `rm -rf ~/.cursor/plugins/local/slipway`.
+
+**Commands** — Cursor has no plugin namespace, so the skills are `/launch`, `/bootstrap`, `/dockerize <app>`, `/plan <env> --layer …`, `/deploy <app> <tag> <env>`, `/verify <app> <env> <tag>` and `/ticket …` with the same arguments as the `/slipway:` commands below. A session-start hook tells the agent where the plugin lives; skill scripts run from that path.
+
+**Check the guards are loaded** exactly as in Claude Code: `echo approve-apply-probe` must be **blocked** (the message starts with `slipway guard:`). If it runs, the hooks are not active; do nothing sensitive in that session.
+
+**What differs in Cursor**
+| Topic | Claude Code | Cursor |
 |---|---|---|
-| `AGENTS.md` | generated and kept current by the scaffold | Cursor reads it natively as plain-markdown agent instructions (its documented alternative to `.cursor/rules`) |
-| Rules | not generated | slipway's path-scoped rules live in `.claude/rules/*.md`, a Claude Code format; a `.cursor/rules/*.mdc` mirror is planned |
-| Skills (`/slipway:…`) | not available in Cursor | Cursor loads Agent Skills from `.cursor/skills`, `.agents/skills` and, for compatibility, `.claude/skills` in the repository or your home folder, never from Claude Code's plugin cache. The `cursor_mirror` option in `.slipway/config.yaml` is reserved for a mirror and changes nothing yet |
-| Guard hooks | not applicable | Cursor has its own `hooks.json` contract (`beforeShellExecution`, `beforeMCPExecution`, …); an adapter is planned. Until then, run slipway commands and applies in Claude Code |
-| MCP servers | configurable by you | add the same servers to `.cursor/mcp.json` (Atlassian `https://mcp.atlassian.com/v2/mcp`, GitHub `https://api.githubcopilot.com/mcp/x/actions`, Azure `npx -y @azure/mcp@latest server start … --read-only`) |
-| Cursor Automations | proven | a PR-review automation on `slipway-demo` reviews every pull request against `AGENTS.md`; see `docs/CURSOR-AUTOMATION.md` |
-| Cloud Agents | environment ready on this repository | see below |
+| Foundation `terraform apply` | attended session: forced permission prompt with the plan summary; unattended: approval token | always the approval token: you run `bash <plugin-root>/scripts/approve-apply.sh <planfile>` in your own terminal, then the agent applies (Cursor documents the hook `ask` decision as not enforced, so a prompt cannot be relied on) |
+| Cloud/GitHub administration, secret writes | forced prompt naming the action | the hook returns `ask` with the reason; Cursor's own command approval is the gate. Do not run slipway with auto-run ("Run Everything") enabled |
+| Read-only sub-agents | hook blocks mutating commands by `agent_type` | `readonly: true` in the subagent definition (Cursor sends no agent type to hooks) |
+| Seed file `.slipway/.env` | Read tool denied, printing denied | `beforeReadFile` denies the read, shell guards deny printing |
+| MCP servers | `.mcp.json`, authorised with `/mcp` | `cursor/mcp.json`, authorised in Settings → MCP (same Atlassian, GitHub and Azure servers) |
+| Cursor Automations | — | a PR-review automation on `slipway-demo` reviews every pull request against `AGENTS.md`; see `docs/CURSOR-AUTOMATION.md` |
 
-**The split that works today**: Cursor writes application code, Dockerfiles for `stack: custom`, docs and pull requests, and reviews them; Claude Code runs the delivery (`/slipway:launch`, approvals, verification, tracking).
-
-**About `.cursor/scripts/cloud-agent-install.sh`**: Cursor Cloud Agents work in a fresh VM built from an environment definition (`.cursor/environment.json` in the repository, or a personal or team saved environment in the Cloud Agents dashboard). Both let you name an *install script* that Cursor runs while building the VM so dependencies exist before the agent starts. This script is that install step for **this** repository: `npm ci` and the Claude Code CLI, which `npm run validate:plugin` needs. You never run it yourself, and it does nothing for local Cursor use; the environment that references it was created from the Cloud Agents dashboard when the "set up my environment" agent opened its pull request.
+**About `.cursor/scripts/cloud-agent-install.sh`**: Cursor Cloud Agents work in a fresh VM built from an environment definition (`.cursor/environment.json` in the repository, or a personal or team saved environment in the Cloud Agents dashboard). Both let you name an *install script* that Cursor runs while building the VM so dependencies exist before the agent starts. This script is that install step for **this** repository: `npm ci` and the Claude Code CLI, which `npm run validate:plugin` needs. You never run it yourself, and it does nothing for local Cursor use.
 
 ## Usage guide
 
@@ -114,13 +124,18 @@ Details, defaults and safety notes per command: `docs/COMMAND-CATALOG.md`.
 | Required check "Expected — Waiting for status" on a PR | per-app checks required with `pr_checks: path-filtered` | switch to `always-run-gate` and require `<app> changes` and `<app> ci` only |
 | CI refuses "already exists in registry" on the first attempt | re-running a release build for an existing version | make a new commit; only a re-run of the same run may reuse a tag |
 | Two plugin versions in `claude plugin list` | user and project scopes | update both (see Install) |
+| Cursor: slipway missing from Settings → Plugins after `install:cursor-local` | window not reloaded, or local plugin imports disabled by the team admin | *Developer: Reload Window*; ask the admin to allow local plugin imports, or use the team marketplace import |
+| Cursor: "apply needs a human approval token" although you are watching | by design: Cursor cannot force a permission prompt from a hook | `bash <plugin-root>/scripts/approve-apply.sh <planfile>` in your terminal, then let the agent retry |
+| Cursor: every shell command is blocked with "guard script missing" or "failed" | adapter cannot find or run the guards (moved folder, no `python3`) | reinstall with `npm run install:cursor-local`; install `python3` |
 
 ## Develop and release
 ```
 npm ci
-npm test                       # renderer, scaffold, verify, queue, ruleset tests + hook branch tests
+npm test                       # renderer, scaffold, verify, queue, ruleset tests + hook branch tests + Cursor format and adapter tests
 npm run validate:plugin        # claude plugin validate --strict
+npm run build:cursor           # regenerate cursor/agents/*.md and cursor/mcp.json from the Claude Code sources
+npm run install:cursor-local   # copy the plugin to ~/.cursor/plugins/local/slipway for testing in Cursor
 node plugins/slipway/scripts/options.cjs
 node plugins/slipway/scripts/scaffold.cjs --repo <target> --dry-run
 ```
-`main` is protected: changes arrive through pull requests with the `validate` check green; only the `slipway-release` GitHub App pushes directly, for the release commit. Releases: semantic-release from Conventional Commits; `fix:` → 1.0.x on `main`, features on `next` → `1.1.0-next.N`. Design and decisions: `docs/DECISIONS.md`, `docs/PIPELINES-PER-APP.md`, `docs/HOOKS.md`, `docs/MCP-INTEGRATION.md`, `docs/COMMAND-CATALOG.md`. License: MIT, © 2026 Abdelazim Ali.
+`main` is protected: changes arrive through pull requests with the `validate` check green; only the `slipway-release` GitHub App pushes directly, for the release commit. Releases: semantic-release from Conventional Commits on `main` (`fix:` → patch, `feat:` → minor); the `next` branch publishes pre-releases (`x.y.z-next.N`) for work that must not touch the review line yet. Both plugin manifests (`.claude-plugin`, `.cursor-plugin`) receive the version. Design and decisions: `docs/DECISIONS.md`, `docs/PIPELINES-PER-APP.md`, `docs/HOOKS.md`, `docs/MCP-INTEGRATION.md`, `docs/COMMAND-CATALOG.md`. License: MIT, © 2026 Abdelazim Ali.
