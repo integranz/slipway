@@ -76,7 +76,10 @@ cache_key() { printf '%s' "$1" | { sha256sum 2>/dev/null || shasum -a 256; } | c
 replay_cached() { # $1 = key: print and exit when a fresh decision exists for the same tool call
   local f="$CACHE_DIR/$1" now mtime
   [ -f "$f" ] || return 0
-  now="$(date +%s)"; mtime="$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)"
+  # GNU stat first (-c %Y); BSD/macOS stat second (-f %m). On Linux `stat -f` succeeds with file-system info, so the
+  # order matters. A non-numeric result is treated as expired.
+  now="$(date +%s)"; mtime="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)"
+  case "$mtime" in ''|*[!0-9]*) mtime=0;; esac
   if [ $(( now - mtime )) -le "$CACHE_TTL" ]; then cat "$f"; exit 0; fi
   rm -f "$f"; return 0
 }
