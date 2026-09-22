@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      { "command": "bash .slipway/cursor-hooks.sh session-start", "timeout": 10 }
+    ],
+    "preToolUse": [
+      { "command": "bash .slipway/cursor-hooks.sh pretooluse", "timeout": 30, "failClosed": true }
+    ],
+    "beforeShellExecution": [
+      { "command": "bash .slipway/cursor-hooks.sh shell", "timeout": 30, "failClosed": true }
+    ],
+    "beforeMCPExecution": [
+      { "command": "bash .slipway/cursor-hooks.sh mcp", "timeout": 15, "failClosed": true }
+    ],
+    "beforeReadFile": [
+      { "command": "bash .slipway/cursor-hooks.sh read", "timeout": 10, "failClosed": true }
+    ]
+  }
+}

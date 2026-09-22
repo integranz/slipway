@@ -40,15 +40,15 @@ slipway is also a Cursor plugin (Cursor Plugin format: `plugins/slipway/.cursor-
 
 **Team marketplace (Cursor Teams)** — Dashboard → Plugins & MCPs → Team Marketplaces → Add Marketplace → *Import from Repo* with `https://github.com/integranz/slipway`; Cursor finds `.cursor-plugin/marketplace.json` and lists **slipway**. Turn on *Auto Refresh* so a merge to `main` updates the plugin (requires the Cursor GitHub App on the repository; at most one re-index every 10 minutes); otherwise click *Refresh*. Then install the plugin from the marketplace and confirm its components under Settings → Plugins.
 
-**Local folder (any plan, for testing)** — from a checkout:
+**On your machine (required for the guards)** — from a checkout:
 ```
-npm run install:cursor-local          # copies plugins/slipway to ~/.cursor/plugins/local/slipway
+npm run install:cursor-local          # ~/.cursor/plugins/local/slipway + the guard hooks in ~/.cursor/hooks.json
 ```
-Reload Cursor (*Developer: Reload Window*) and check Settings → Plugins (or Customize) for slipway's skills, rules, subagents, hooks and MCP servers. Cursor Teams admins must allow *Local Plugin Imports*. Re-run the script after every change; remove with `rm -rf ~/.cursor/plugins/local/slipway`.
+Cursor 3.21 does not load hooks from an installed plugin (they sit behind a feature gate tied to third-party plugin import, which team admins can disable), so the script also registers the plugin's hook adapters in your user hooks file, merging with whatever is there. Reload Cursor (*Developer: Reload Window*) and check Settings → Plugins for slipway's skills, rules, subagents and MCP servers. Cursor Teams admins must allow *Local Plugin Imports* for the plugin folder; the hooks file works regardless. Re-run after every plugin update; `npm run install:cursor-local -- --uninstall` removes the folder and only slipway's hook entries. Repositories delivered by slipway also carry `.cursor/hooks.json` and `.slipway/cursor-hooks.sh`, which route to the installed plugin (and allow everything, with a warning at session start, on a machine without it).
 
 **Commands** — Cursor has no plugin namespace, so the skills are `/launch`, `/bootstrap`, `/dockerize <app>`, `/plan <env> --layer …`, `/deploy <app> <tag> <env>`, `/verify <app> <env> <tag>` and `/ticket …` with the same arguments as the `/slipway:` commands below. A session-start hook tells the agent where the plugin lives; skill scripts run from that path.
 
-**Check the guards are loaded** exactly as in Claude Code: `echo approve-apply-probe` must be **blocked** (the message starts with `slipway guard:`). If it runs, the hooks are not active; do nothing sensitive in that session.
+**Check the guards are loaded** exactly as in Claude Code: in an Agent session, `echo approve-apply-probe` must be **blocked** (the message starts with `slipway guard:`). If it prints, the hooks are not active: run `npm run install:cursor-local`, reload the window, and look at the *Hooks* output channel; do nothing sensitive in that session.
 
 **What differs in Cursor**
 | Topic | Claude Code | Cursor |
@@ -125,6 +125,7 @@ Details, defaults and safety notes per command: `docs/COMMAND-CATALOG.md`.
 | CI refuses "already exists in registry" on the first attempt | re-running a release build for an existing version | make a new commit; only a re-run of the same run may reuse a tag |
 | Two plugin versions in `claude plugin list` | user and project scopes | update both (see Install) |
 | Cursor: slipway missing from Settings → Plugins after `install:cursor-local` | window not reloaded, or local plugin imports disabled by the team admin | *Developer: Reload Window*; ask the admin to allow local plugin imports, or use the team marketplace import |
+| Cursor: `echo approve-apply-probe` prints | hooks not registered: Cursor 3.21 loads no plugin hooks, and `~/.cursor/hooks.json` has no slipway entries (or the repository has no `.cursor/hooks.json`) | `npm run install:cursor-local`, reload the window, check the *Hooks* output channel for `slipway` |
 | Cursor: "apply needs a human approval token" although you are watching | by design: Cursor cannot force a permission prompt from a hook | `bash <plugin-root>/scripts/approve-apply.sh <planfile>` in your terminal, then let the agent retry |
 | Cursor: every shell command is blocked with "guard script missing" or "failed" | adapter cannot find or run the guards (moved folder, no `python3`) | reinstall with `npm run install:cursor-local`; install `python3` |
 

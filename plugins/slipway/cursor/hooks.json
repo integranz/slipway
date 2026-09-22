@@ -4,6 +4,9 @@
     "sessionStart": [
       { "command": "./cursor/hooks/session-start.sh", "timeout": 10 }
     ],
+    "preToolUse": [
+      { "command": "./cursor/hooks/pretooluse.sh", "timeout": 30, "failClosed": true }
+    ],
     "beforeShellExecution": [
       { "command": "./cursor/hooks/shell.sh", "timeout": 30, "failClosed": true }
     ],
@@ -12,9 +15,6 @@
     ],
     "beforeReadFile": [
       { "command": "./cursor/hooks/read.sh", "timeout": 10, "failClosed": true }
-    ],
-    "preToolUse": [
-      { "command": "./cursor/hooks/write.sh", "matcher": "Write|Edit|StrReplace|MultiEdit|edit_file|search_replace|write_file", "timeout": 20, "failClosed": true }
     ]
   }
 }
