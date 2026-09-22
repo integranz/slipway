@@ -570,7 +570,8 @@
     },
     "cursor_mirror": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Reserved: mirror the slipway skills and rules into Cursor's .cursor/skills and .cursor/rules. Not implemented yet; the value changes nothing."
     }
   },
   "allOf": [
