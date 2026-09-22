@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/integranz/slipway/compare/v1.1.0...v1.1.1) (2026-09-22)
+
+### Bug Fixes
+
+* **cursor:** enforce the guards through the hook sources Cursor 3.21 actually loads ([#5](https://github.com/integranz/slipway/issues/5)) ([5cbf7ff](https://github.com/integranz/slipway/commit/5cbf7ffd4aa711ccdbf0a2935fa758417b24beae))
+
 ## [1.1.0](https://github.com/integranz/slipway/compare/v1.0.1...v1.1.0) (2026-09-22)
 
 ### Features
