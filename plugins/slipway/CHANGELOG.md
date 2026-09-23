@@ -1,3 +1,9 @@
+## [1.1.3](https://github.com/integranz/slipway/compare/v1.1.2...v1.1.3) (2026-09-23)
+
+### Bug Fixes
+
+* **skills:** strict-YAML frontmatter so Cursor loads all 8 skills and 3 subagents ([#9](https://github.com/integranz/slipway/issues/9)) ([29bff79](https://github.com/integranz/slipway/commit/29bff79c31b14668d6c549bcc82cb2fb14b48e97))
+
 ## [1.1.2](https://github.com/integranz/slipway/compare/v1.1.1...v1.1.2) (2026-09-23)
 
 ### Bug Fixes
