@@ -19,17 +19,15 @@ function write(file, content) {
   console.log("wrote", path.relative(P, file));
 }
 
+const yaml = require(path.join(P, "scripts", "lib", "js-yaml.min.js"));
 function parseFrontmatter(md, name) {
   const m = md.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!m) throw new Error(`${name}: no frontmatter`);
-  const fm = {};
-  let key = null;
-  for (const line of m[1].split("\n")) {
-    const kv = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
-    if (kv) { key = kv[1]; fm[key] = kv[2] === "" ? [] : kv[2]; }
-    else if (key && /^\s+-\s+/.test(line) && Array.isArray(fm[key])) fm[key].push(line.replace(/^\s+-\s+/, ""));
-  }
-  return { fm, body: m[2] };
+  // Strict YAML on purpose: Cursor's loader is strict (a description with ": " unquoted silently drops the component,
+  // seen 2026-09-23 with 4 of 8 skills), while Claude Code's parser is lenient. Fail loudly here instead.
+  let fm;
+  try { fm = yaml.load(m[1]); } catch (e) { throw new Error(`${name}: frontmatter is not strict YAML: ${e.message.split("\n")[0]}`); }
+  return { fm: fm || {}, body: m[2] };
 }
 
 // Subagents: Cursor frontmatter is name/description/model/readonly (cursor.com/docs/subagents, read 2026-09-22).
@@ -37,13 +35,13 @@ function parseFrontmatter(md, name) {
 for (const f of fs.readdirSync(path.join(P, "agents")).filter((x) => x.endsWith(".md")).sort()) {
   const { fm, body } = parseFrontmatter(fs.readFileSync(path.join(P, "agents", f), "utf8"), f);
   if (!fm.name || !fm.description) throw new Error(`${f}: name and description are required`);
-  const disallowed = String(fm.disallowedTools || "");
-  const tools = String(fm.tools || "");
+  const disallowed = Array.isArray(fm.disallowedTools) ? fm.disallowedTools.join(", ") : String(fm.disallowedTools || "");
+  const tools = Array.isArray(fm.tools) ? fm.tools.join(", ") : String(fm.tools || "");
   const readonly = /\bEdit\b/.test(disallowed) && /\bWrite\b/.test(disallowed) && !/\b(Edit|Write)\b/.test(tools);
   const out = [
     "---",
     `name: ${fm.name}`,
-    `description: ${fm.description}`,
+    `description: ${JSON.stringify(String(fm.description))}`,
     "model: inherit",
     ...(readonly ? ["readonly: true"] : []),
     "---",

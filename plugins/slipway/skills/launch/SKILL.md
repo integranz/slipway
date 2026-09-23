@@ -1,6 +1,6 @@
 ---
 name: launch
-description: One command that takes a repository from nothing to a verified, tracked deployment: preflight of tools and credentials, intake interview and scaffold, Azure and GitHub prerequisites, per-app images, foundation infrastructure, per-app CI/CD with in-session approvals, verification and tracking. Idempotent: re-run it any time and it continues from what it finds.
+description: "One command that takes a repository from nothing to a verified, tracked deployment: preflight of tools and credentials, intake interview and scaffold, Azure and GitHub prerequisites, per-app images, foundation infrastructure, per-app CI/CD with in-session approvals, verification and tracking. Idempotent: re-run it any time and it continues from what it finds."
 disable-model-invocation: true
 allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Write, Edit, Agent, AskUserQuestion, Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*), Bash(bash "${CLAUDE_PLUGIN_ROOT}/scripts/*), Bash(bash .slipway/setup-azure.sh *), Bash(gh *), Bash(az *), Bash(git *), Bash(docker *), Bash(terraform -chdir=* *), Bash(dotnet *), Bash(npm *), Bash(nbgv *), Bash(curl -fsS *), Bash(set -a; . .slipway/.env; set +a; *), Bash(source .slipway/.env && *), Bash(pbpaste), Bash(xclip *), Bash(wl-paste)
 ---

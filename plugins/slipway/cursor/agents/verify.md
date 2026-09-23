@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Verification sub-agent for the slipway delivery lifecycle. Use after a change or a deployment to check falsifiable claims independently: a container runs and answers its health endpoint, a CI run succeeded and produced the expected immutable tags, a deployed URL returns 200 with the expected version, the running image digest matches the registry digest for the tag, the Terraform app layer has no drift, no secrets are committed. Returns CONFIRMED / REFUTED / UNVERIFIABLE per claim with the command output as evidence. Never fixes anything.
+description: "Verification sub-agent for the slipway delivery lifecycle. Use after a change or a deployment to check falsifiable claims independently: a container runs and answers its health endpoint, a CI run succeeded and produced the expected immutable tags, a deployed URL returns 200 with the expected version, the running image digest matches the registry digest for the tag, the Terraform app layer has no drift, no secrets are committed. Returns CONFIRMED / REFUTED / UNVERIFIABLE per claim with the command output as evidence. Never fixes anything."
 model: inherit
 readonly: true
 ---

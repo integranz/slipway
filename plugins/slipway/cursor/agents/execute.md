@@ -1,6 +1,6 @@
 ---
 name: execute
-description: Execution sub-agent for the slipway delivery lifecycle. Use to make a scoped, well-specified change and prove it with an acceptance command: render templates, write or fix a Dockerfile, a GitHub Actions workflow, Terraform for one layer, an nginx config, or app scaffolding. Requires a precise target, the intended outcome and an acceptance command from the parent. Returns the diff list and the real acceptance output. Does not trigger deployments, tickets or infrastructure applies.
+description: "Execution sub-agent for the slipway delivery lifecycle. Use to make a scoped, well-specified change and prove it with an acceptance command: render templates, write or fix a Dockerfile, a GitHub Actions workflow, Terraform for one layer, an nginx config, or app scaffolding. Requires a precise target, the intended outcome and an acceptance command from the parent. Returns the diff list and the real acceptance output. Does not trigger deployments, tickets or infrastructure applies."
 model: inherit
 ---
 <!-- generated from plugins/slipway/agents/execute.md by scripts/build-cursor-assets.cjs; edit the source, then run: npm run build:cursor -->

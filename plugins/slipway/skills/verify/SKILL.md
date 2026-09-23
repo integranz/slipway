@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Verify one app's deployment independently: run the deterministic verification script for an app, environment and tag, have the verify sub-agent re-check anything refuted or unverifiable, and record the evidence file under .slipway/evidence/<app>/<tag>.md.
+description: "Verify one app's deployment independently: run the deterministic verification script for an app, environment and tag, have the verify sub-agent re-check anything refuted or unverifiable, and record the evidence file under .slipway/evidence/<app>/<tag>.md."
 disable-model-invocation: true
 allowed-tools: Read, Glob, Grep, Write, Edit, Agent, Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*), Bash(az account *), Bash(az containerapp show *), Bash(az containerapp revision list *), Bash(az acr repository show *), Bash(az acr repository show-tags *), Bash(gh auth status *), Bash(gh run list *), Bash(gh run view *), Bash(gh run download *), Bash(gh api repos/*), Bash(terraform -chdir=infra/apps/* init *), Bash(terraform -chdir=infra/apps/* plan *), Bash(terraform -chdir=infra/apps/* output *), Bash(git status *), Bash(git ls-files *), Bash(curl *)
 ---

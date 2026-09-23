@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: Trigger the CD workflow of one app for one immutable image tag and one environment, wait for the human approval on the GitHub environment, monitor the run to completion and report the deployed URL.
+description: "Trigger the CD workflow of one app for one immutable image tag and one environment, wait for the human approval on the GitHub environment, monitor the run to completion and report the deployed URL."
 disable-model-invocation: true
 allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/app-info.cjs" *), Bash(gh run list *), Bash(gh run view *), Bash(gh run watch *), Bash(gh run download *), Bash(gh workflow run *), Bash(gh api repos/*), Bash(az acr repository show *), Bash(az acr repository show-tags *), Bash(az account show *), Bash(git rev-parse *), Bash(curl -fsS *)
 ---

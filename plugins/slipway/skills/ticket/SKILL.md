@@ -1,6 +1,6 @@
 ---
 name: ticket
-description: Keep the tracker current for this repository's delivery through the Atlassian Rovo MCP Server: one Story per delivery (attached to an optional Epic), one Subtask per unit of work, read-backs after every write, and an offline queue so an unreachable tracker never blocks delivery.
+description: "Keep the tracker current for this repository's delivery through the Atlassian Rovo MCP Server: one Story per delivery (attached to an optional Epic), one Subtask per unit of work, read-backs after every write, and an offline queue so an unreachable tracker never blocks delivery."
 disable-model-invocation: true
 allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Edit, Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/tracking-queue.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/app-info.cjs" *), Bash(git rev-parse *), Bash(git remote *), Bash(git status *), Bash(gh run list *), Bash(gh run view *)
 ---
