@@ -9,6 +9,7 @@ root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || echo "$dir")"
 if command -v sha256sum >/dev/null 2>&1; then sha="$(sha256sum "$plan" | cut -d' ' -f1)"; else sha="$(shasum -a 256 "$plan" | cut -d' ' -f1)"; fi
 ttl="${SLIPWAY_APPROVAL_TTL:-600}"; exp=$(( $(date +%s) + ttl ))
 mkdir -p "$root/.slipway/approvals"
+find "$root/.slipway/approvals" -maxdepth 1 -name '*.used' -type f -delete 2>/dev/null || true  # stale replay markers of earlier applies
 printf '%s\n%s\n%s\n' "$sha" "$exp" "$(basename "$plan") approved by $(id -un) at $(date -u +%FT%TZ)" > "$root/.slipway/approvals/$sha"
 echo "Approved $(basename "$plan") (sha256 ${sha:0:12}) for one apply within ${ttl}s."
 echo "In the agent session, run exactly: terraform -chdir=$dir apply $(basename "$plan")"

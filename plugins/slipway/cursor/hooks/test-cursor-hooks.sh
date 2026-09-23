@@ -9,6 +9,7 @@ printf 'plan' > "$T/infra/foundation/tfplan.dev"; printf 'plan' > "$T/infra/apps
 printf '.slipway/approvals/\n*.tfvars\n!*.tfvars.example\ntfplan*\n.env\n' > "$T/.gitignore"; git -C "$T" add .gitignore; git -C "$T" -c user.email=t@t -c user.name=t commit -qm init
 unset SLIPWAY_SESSION_ATTENDED CLAUDE_CODE_SESSION_ATTENDED
 export SLIPWAY_CURSOR_CACHE="$T/cache"; export SLIPWAY_CURSOR_CACHE_TTL=3
+export SLIPWAY_APPROVAL_REPLAY_SECONDS=0   # guard-level replay is tested in test-hooks.sh
 clear_cache() { rm -rf "$T/cache"; }
 
 uid() { python3 -c 'import uuid; print(uuid.uuid4().hex[:12])'; }

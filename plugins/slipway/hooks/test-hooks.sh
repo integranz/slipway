@@ -3,6 +3,7 @@
 set -u
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"; P="$(dirname "$H")"
 pass=0; fail=0
+export SLIPWAY_APPROVAL_REPLAY_SECONDS=0   # the replay window is tested in its own block
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 git -C "$T" init -q -b main; mkdir -p "$T/infra/foundation" "$T/infra/app" "$T/infra/apps/api" "$T/.github/workflows"
 printf 'plan' > "$T/infra/foundation/tfplan.dev"; printf 'plan' > "$T/infra/app/tfplan.dev"; printf 'plan' > "$T/infra/apps/api/tfplan.dev"
@@ -188,5 +189,21 @@ expect "kv show bare denied"                         guard-admin-actions.sh 2 "$
 expect "kv show --query value denied"                guard-admin-actions.sh 2 "$(json_bash 'az keyvault secret show --vault-name kv-x --name database-url --query value -o tsv' "$T")"
 expect "kv download denied"                          guard-admin-actions.sh 2 "$(json_bash 'az keyvault secret download --vault-name kv-x --name database-url --file x.txt' "$T")"
 expect "kv list of names allowed"                    guard-admin-actions.sh 0 "$(json_bash 'az keyvault secret list --vault-name kv-x --query "[].name" -o tsv' "$T")"
+
+echo "guard-terraform-apply: several hook deliveries of one tool call share one approval"
+export SLIPWAY_APPROVAL_REPLAY_SECONDS=15
+rm -rf "$T/.slipway/approvals"; bash "$P/scripts/approve-apply.sh" "$T/infra/foundation/tfplan.dev" >/dev/null
+expect "first delivery consumes the token"          guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" '"permissionDecision":"allow"'
+expect "second delivery within the window replays"  guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" 'delivered again'
+touch -t 202001010000 "$T/.slipway/approvals/"*.used
+expect "stale marker: denied again"                 guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")"
+if [ -z "$(ls -A "$T/.slipway/approvals" 2>/dev/null)" ]; then pass=$((pass+1)); echo "  ok   stale marker removed, approvals dir empty"; else fail=$((fail+1)); echo "  FAIL leftover in approvals: $(ls -A "$T/.slipway/approvals")"; fi
+bash "$P/scripts/approve-apply.sh" "$T/infra/foundation/tfplan.dev" >/dev/null
+for i in 1 2 3 4 5; do ( printf '%s' "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" | bash "$H/guard-terraform-apply.sh" > "$T/conc$i.out" 2>/dev/null; echo $? > "$T/conc$i.rc" ) & done; wait
+okc=0; for i in 1 2 3 4 5; do [ "$(cat "$T/conc$i.rc")" = 0 ] && grep -q '"permissionDecision":"allow"' "$T/conc$i.out" && okc=$((okc+1)); done
+if [ "$okc" = 5 ]; then pass=$((pass+1)); echo "  ok   5 concurrent deliveries with one token: all allowed"; else fail=$((fail+1)); echo "  FAIL concurrent deliveries: $okc/5 allowed"; fi
+rm -f "$T/.slipway/approvals/"*.used
+export SLIPWAY_APPROVAL_REPLAY_SECONDS=0
+expect "after the marker is gone: denied"           guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")"
 
 echo; echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
