@@ -19,6 +19,8 @@ Status: **golden path completed 2026-09-16** (flat story); **tracking model epic
 - `azure` warm start is a few seconds, but a cold `npx` download can exceed the MCP startup timeout; pre-warm in cloud environment setup scripts (`npx -y @azure/mcp@latest --version`).
 - Error handling per skill: a missing or unauthorised server is reported with the exact command to fix it; skills never fabricate ticket keys, run ids or resource states.
 
+- **Cursor (2026-09-23)**: the Atlassian and Azure servers connect from the plugin's `cursor/mcp.json` like in Claude Code. The GitHub server (`api.githubcopilot.com/mcp/x/actions`) fails in Cursor with "Incompatible auth server: does not support dynamic client registration", so `cursor/mcp.json` sends `Authorization: Bearer ${GITHUB_MCP_TOKEN}` and the Cursor manifest declares that optional variable (Settings → Plugins → slipway → Configure; fine-grained PAT, Actions read/write + Metadata read). The token never enters the repository. Without it the skills use the `gh` CLI, which every slipway procedure accepts as the alternative.
+
 ## Golden path procedure (goal 5, scheduled with the user)
 1. In `adlc-demo`, start an interactive session with the plugin: `claude --plugin-dir ~/personal/slipway/plugins/slipway` (or the installed plugin), accept the folder trust prompt.
 2. `/mcp` → select `atlassian` → complete the OAuth login for `integranz.atlassian.net` (the plugin's server URL is the v2 endpoint; existing v1 grants do not apply). Optionally authorise `github` the same way.
