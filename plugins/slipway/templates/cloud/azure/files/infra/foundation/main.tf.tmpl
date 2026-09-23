@@ -21,7 +21,13 @@ resource "azurerm_log_analytics_workspace" "this" {
   tags                = local.tags
 }
 
-resource "azurerm_container_registry" "this" {
+<%#eq options.registry_scope "existing"%># Shared registry (options.registry_scope: existing): referenced, never created or deleted by this repository.
+# This repository's CI/CD principal gets AcrPush (and Reader for the app layer's lookup), the app identity AcrPull.
+data "azurerm_container_registry" "this" {
+  name                = local.acr_name
+  resource_group_name = local.acr_resource_group_name
+}
+<%else%>resource "azurerm_container_registry" "this" {
   name                = local.acr_name
   location            = data.azurerm_resource_group.env.location
   resource_group_name = data.azurerm_resource_group.env.name
@@ -29,7 +35,7 @@ resource "azurerm_container_registry" "this" {
   admin_enabled       = false # pulls use the app identity (AcrPull), pushes use the CI/CD principal (AcrPush)
   tags                = local.tags
 }
-
+<%/eq%>
 # Identity the apps run as: pulls images and reads secrets, nothing else.
 resource "azurerm_user_assigned_identity" "apps" {
   name                = local.identity_name
@@ -53,7 +59,7 @@ resource "azurerm_key_vault" "this" {
 # --- role assignments (all non-privileged; assignable under an ABAC-conditioned User Access Administrator) ---
 
 resource "azurerm_role_assignment" "apps_acr_pull" {
-  scope                = azurerm_container_registry.this.id
+  scope                = <%#eq options.registry_scope "existing"%>data.<%/eq%>azurerm_container_registry.this.id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.apps.principal_id
   principal_type       = "ServicePrincipal"
@@ -69,7 +75,7 @@ resource "azurerm_role_assignment" "apps_kv_secrets_user" {
 }
 
 resource "azurerm_role_assignment" "cicd_acr_push" {
-  scope                            = azurerm_container_registry.this.id
+  scope                            = <%#eq options.registry_scope "existing"%>data.<%/eq%>azurerm_container_registry.this.id
   role_definition_name             = "AcrPush"
   principal_id                     = data.azuread_service_principal.cicd.object_id
   principal_type                   = "ServicePrincipal"
@@ -77,7 +83,18 @@ resource "azurerm_role_assignment" "cicd_acr_push" {
   description                      = "CI pushes immutable image tags"
 }
 
-# The person applying this layer sets secret values out of band (az keyvault secret set).
+<%#eq options.registry_scope "existing"%># The CI/CD principal reads the shared registry's metadata for the app layer's data source; its Contributor role covers
+# only this repository's resource group.
+resource "azurerm_role_assignment" "cicd_acr_reader" {
+  scope                            = data.azurerm_container_registry.this.id
+  role_definition_name             = "Reader"
+  principal_id                     = data.azuread_service_principal.cicd.object_id
+  principal_type                   = "ServicePrincipal"
+  skip_service_principal_aad_check = true
+  description                      = "CI/CD looks up the shared registry (app layer data source)"
+}
+
+<%/eq%># The person applying this layer sets secret values out of band (az keyvault secret set).
 resource "azurerm_role_assignment" "applier_kv_secrets_officer" {
   scope                = azurerm_key_vault.this.id
   role_definition_name = "Key Vault Secrets Officer"

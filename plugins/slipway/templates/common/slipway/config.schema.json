@@ -148,6 +148,13 @@
             "azure-postgresql-flexible"
           ],
           "description": "Optional (default none)."
+        },
+        "registry_scope": {
+          "enum": [
+            "per-repository",
+            "existing"
+          ],
+          "description": "per-repository (default): the foundation layer creates the registry. existing: an Azure Container Registry shared by several repositories is referenced, never created or deleted; the foundation layer only assigns roles on it."
         }
       }
     },
@@ -208,6 +215,11 @@
               "type": "string"
             }
           }
+        },
+        "acr_resource_group": {
+          "type": "string",
+          "pattern": "^[-\\w\\.\\(\\)]{1,90}$",
+          "description": "Resource group of an existing shared registry (options.registry_scope: existing) when it is not azure.resource_group."
         }
       }
     },

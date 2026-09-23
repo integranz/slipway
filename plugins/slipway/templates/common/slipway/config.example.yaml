@@ -10,6 +10,7 @@ options:
   cloud: azure
   compute: aca
   registry: acr
+  registry_scope: per-repository   # or `existing`: a shared registry named in azure.acr_name (+ azure.acr_resource_group), referenced not created
   runner: github-actions
   versioning: nbgv
   branching: trunk
@@ -26,6 +27,7 @@ azure:
   location: westeurope
   resource_group: rg-adlc-demo-dev
   acr_name: acradlcdemo
+  # acr_resource_group: rg-shared-platform   # only with options.registry_scope: existing, when the registry lives in another group
   key_vault_name: kv-adlc-demo-dev
   identity_name: id-adlc-demo-dev
   state:

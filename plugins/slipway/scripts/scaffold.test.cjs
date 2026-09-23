@@ -194,6 +194,37 @@ test("foundation layer renders (with the Container Apps environment) and passes 
   tfCheck(dir);
 });
 
+test("registry_scope=existing references a shared registry instead of creating one (foundation and app layer)", () => {
+  const repo = mkRepo((c) => { c.options.registry_scope = "existing"; c.azure.acr_resource_group = "rg-shared-platform"; });
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr + r.stdout);
+  const main = read(repo, "infra/foundation/main.tf"), locals = read(repo, "infra/foundation/locals.tf"), outputs = read(repo, "infra/foundation/outputs.tf");
+  assert.match(main, /data "azurerm_container_registry" "this"/); assert.doesNotMatch(main, /resource "azurerm_container_registry"/);
+  assert.match(main, /resource_group_name = local\.acr_resource_group_name/);
+  assert.match(main, /"cicd_acr_reader"/); assert.match(main, /scope\s+= data\.azurerm_container_registry\.this\.id\n\s+role_definition_name\s+= "AcrPush"/);
+  assert.match(main, /scope\s+= data\.azurerm_container_registry\.this\.id\n\s+role_definition_name = "AcrPull"/);
+  assert.match(locals, /acr_resource_group_name = "rg-shared-platform"/);
+  assert.match(outputs, /data\.azurerm_container_registry\.this\.login_server/); assert.doesNotMatch(main + outputs, /<%/);
+  const appData = read(repo, "infra/apps/api/data.tf"), appLocals = read(repo, "infra/apps/api/locals.tf");
+  assert.match(appData, /resource_group_name = local\.acr_resource_group_name/); assert.match(appLocals, /acr_resource_group_name = "rg-shared-platform"/);
+  assert.match(read(repo, ".slipway/SETUP.md"), /existing, referenced/); assert.match(read(repo, "AGENTS.md"), /existing shared registry `acradlcdemo`/);
+  tfCheck(path.join(repo, "infra", "foundation")); tfCheck(path.join(repo, "infra", "apps", "api"));
+});
+
+test("registry_scope defaults to per-repository: the registry is created, no reader role, no shared group local", () => {
+  const repo = mkRepo();
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
+  const main = read(repo, "infra/foundation/main.tf");
+  assert.match(main, /resource "azurerm_container_registry" "this"/); assert.doesNotMatch(main, /data "azurerm_container_registry"|cicd_acr_reader/);
+  assert.doesNotMatch(read(repo, "infra/foundation/locals.tf") + read(repo, "infra/apps/api/locals.tf"), /acr_resource_group_name/);
+  assert.match(read(repo, "infra/apps/api/data.tf"), /resource_group_name = local\.resource_group_name\n\}/);
+  // an acr_resource_group that differs from the repository group is a configuration error in this scope
+  const bad = mkRepo((c) => { c.azure.acr_resource_group = "rg-elsewhere"; });
+  const v = validate(path.join(bad, ".slipway", "config.yaml")); assert.notEqual(v.status, 0); assert.match(v.stdout + v.stderr, /registry_scope=per-repository/);
+  // existing is implemented for acr only
+  const ghcr = mkRepo((c) => { c.options.registry_scope = "existing"; c.options.registry = "ghcr"; });
+  const v2 = validate(path.join(ghcr, ".slipway", "config.yaml")); assert.notEqual(v2.status, 0);
+});
+
 test("one root module per app (compute=aca) renders and passes terraform fmt/validate", () => {
   const repo = mkRepo(c => { c.apps[0].secrets = [{ name: "db-password", env: "DB_PASSWORD" }]; c.apps[0].env = { ASPNETCORE_ENVIRONMENT: "Production" }; });
   const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);

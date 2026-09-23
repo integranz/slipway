@@ -27,3 +27,10 @@ Verified 2026-09-14 against the azurerm provider docs (5.x, `main` branch), the 
 2. Human: `bash <plugin>/scripts/approve-apply.sh infra/foundation/tfplan.<env>` (token, 10 min, single use).
 3. Session: `terraform -chdir=infra/foundation apply tfplan.<env>` (the guard hook consumes the token; any other apply form is blocked).
 4. Human sets secret values: `az keyvault secret set --vault-name <kv> --name <NAME> --value …` (needs the Secrets Officer role the layer grants).
+
+## Registry scope (`options.registry_scope`, added 2026-09-23)
+- `per-repository` (default): `infra/foundation` creates the registry (Basic, admin disabled) in the repository's resource group and assigns AcrPush to the CI/CD principal and AcrPull to the app identity. The resource group stays the security and cost boundary.
+- `existing`: the registry is shared by several repositories. `azure.acr_name` names it and `azure.acr_resource_group` its group when that is not `azure.resource_group`. The foundation layer only references it (`data "azurerm_container_registry"`) and assigns three roles on it for this repository: AcrPush (CI/CD principal, pushes), Reader (CI/CD principal, so the app layer's data source can read the registry from another group) and AcrPull (app identity). Outputs and the app layer read the login server from the data source; CI logs in with `az acr login --name <acr_name>`, which resolves the registry by name.
+- Who can apply: assigning roles on the shared registry needs Owner or User Access Administrator on that registry (or its group); `setup-azure.sh` grants nothing there. Ask a subscription owner once per shared registry.
+- Changing scope on a delivered repository is a state operation, not a re-render: `terraform state rm azurerm_container_registry.this` (to keep the registry) before re-planning, or accept the destroy consciously. The plan skill shows the destroy; never apply it by reflex.
+- Same pattern later for a shared Container Apps environment or Log Analytics workspace (not offered yet).
