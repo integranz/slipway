@@ -1,3 +1,9 @@
+## [1.1.4](https://github.com/integranz/slipway/compare/v1.1.3...v1.1.4) (2026-09-23)
+
+### Bug Fixes
+
+* **hooks:** concurrent deliveries of one tool call share one approval; stale replay markers cleaned ([#10](https://github.com/integranz/slipway/issues/10)) ([f2a0003](https://github.com/integranz/slipway/commit/f2a00039251b7da7d413d46eea21f4a11a75b255))
+
 ## [1.1.3](https://github.com/integranz/slipway/compare/v1.1.2...v1.1.3) (2026-09-23)
 
 ### Bug Fixes
