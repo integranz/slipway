@@ -16,6 +16,8 @@ Every app has its own CD workflow, state and version; deploying `api` never touc
 2. GitHub access: the GitHub MCP server (`actions_run_trigger`, `actions_get`, `get_job_logs`) or an authenticated `gh` CLI. Azure read access for the tag check (`az account show`).
 3. With `options.cd_trigger: on-ci-success` the CD of the latest release may already be running or waiting for approval: `gh run list --workflow <prefix>-<app>-cd --limit 3 --json databaseId,status,displayTitle` first; if a run for this tag exists, watch it (Step 3) instead of dispatching a duplicate.
 
+4. Every `apps[].secrets` entry of the app exists in the key vault: `az keyvault secret show --vault-name <azure.key_vault_name> --name <name> --query id -o tsv` (never without `--query id`; the guard denies reading the value). A missing secret stops here with the `az keyvault secret set … --value "$<ENV>"` command for the human (or from the seed file behind a prompt, see the launch skill); the CD apply would fail on the Key Vault reference otherwise.
+
 ## Step 1 — Resolve the tag
 - If `$1` is given: it must match `^[0-9]+\.[0-9]+\.[0-9]+` and must not be `latest` or a branch name (the guard hook enforces this too).
 - Otherwise: `gh run list --workflow <prefix>-<app>-ci --branch <default_branch> --status success --limit 1 --json databaseId` → `gh api repos/<owner>/<repo>/actions/runs/<id>/artifacts --jq '.artifacts[].name'` → the `release-manifest-<app>-<version>` artifact gives the version. Tell the user which tag was chosen and from which run.

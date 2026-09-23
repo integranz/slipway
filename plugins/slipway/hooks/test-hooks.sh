@@ -175,4 +175,18 @@ expect "marker but bypassPermissions -> denied"   guard-admin-actions.sh 2 "$(js
 expect "marker: apply without token -> ask"       guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" "$ASK"
 unset SLIPWAY_SESSION_ATTENDED
 
+echo "guard-admin-actions: Key Vault secret values"
+export CLAUDE_CODE_SESSION_ATTENDED=1
+expect "kv set from seed variable, attended -> ask"  guard-admin-actions.sh 0 "$(json_bash 'set -a; . .slipway/.env; set +a; az keyvault secret set --vault-name kv-x --name database-url --value "$DATABASE_URL"' "$T")" 'database-url'
+expect "kv set from clipboard -> ask"                guard-admin-actions.sh 0 "$(json_bash 'az keyvault secret set --vault-name kv-x --name database-url --value "$(pbpaste)"' "$T")" "$ASK"
+expect "kv set from file -> ask"                     guard-admin-actions.sh 0 "$(json_bash 'az keyvault secret set --vault-name kv-x --name tls-cert --file ./cert.pem' "$T")" "$ASK"
+expect "kv set with literal value denied"            guard-admin-actions.sh 2 "$(json_bash 'az keyvault secret set --vault-name kv-x --name database-url --value postgres://u:p@h:5432/db' "$T")"
+unset CLAUDE_CODE_SESSION_ATTENDED
+expect "kv set from variable, unattended denied"     guard-admin-actions.sh 2 "$(json_bash 'az keyvault secret set --vault-name kv-x --name database-url --value "$DATABASE_URL"' "$T")"
+expect "kv show --query id allowed"                  guard-admin-actions.sh 0 "$(json_bash 'az keyvault secret show --vault-name kv-x --name database-url --query id -o tsv' "$T")"
+expect "kv show bare denied"                         guard-admin-actions.sh 2 "$(json_bash 'az keyvault secret show --vault-name kv-x --name database-url' "$T")"
+expect "kv show --query value denied"                guard-admin-actions.sh 2 "$(json_bash 'az keyvault secret show --vault-name kv-x --name database-url --query value -o tsv' "$T")"
+expect "kv download denied"                          guard-admin-actions.sh 2 "$(json_bash 'az keyvault secret download --vault-name kv-x --name database-url --file x.txt' "$T")"
+expect "kv list of names allowed"                    guard-admin-actions.sh 0 "$(json_bash 'az keyvault secret list --vault-name kv-x --query "[].name" -o tsv' "$T")"
+
 echo; echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
