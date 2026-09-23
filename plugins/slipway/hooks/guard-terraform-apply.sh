@@ -47,12 +47,30 @@ planfile="$(printf '%s' "$applyargs" | tr ' ' '\n' | grep -Ev '^-|^$' | tail -1 
 case "$planfile" in /*) planpath="$planfile";; *) planpath="$dir/$planfile";; esac
 [ -f "$planpath" ] || deny "Plan file '$planfile' does not exist in $dir. Re-run /slipway:plan and apply the exact plan file it produced."
 
-root="$(repo_root "$dir")"; sha="$(sha256_file "$planpath")"; token="$root/.slipway/approvals/$sha"
+root="$(repo_root "$dir")"; sha="$(sha256_file "$planpath")"; token="$root/.slipway/approvals/$sha"; used="$token.used"
+# One tool call can reach this guard several times at once (Cursor runs the plugin, user and project hook copies in
+# parallel; Claude Code runs it once). The token is consumed by an atomic rename, so exactly one delivery consumes it;
+# the others find the .used marker and, within SLIPWAY_APPROVAL_REPLAY_SECONDS (default 15, far shorter than a model
+# turn), receive the same allow. A stale marker is removed and the apply is denied again.
+REPLAY="${SLIPWAY_APPROVAL_REPLAY_SECONDS:-15}"
 if [ -f "$token" ]; then
-  expiry="$(sed -n '2p' "$token" | tr -dc '0-9')"; now="$(date +%s)"
-  if [ -z "$expiry" ] || [ "$now" -gt "$expiry" ]; then rm -f "$token"; deny "Approval for '$planfile' has expired (10 min TTL). Ask the human to approve again."; fi
-  rm -f "$token"   # single use
-  allow_with_reason "Human-approved plan $planfile (sha256 ${sha:0:12}) applied once; approval consumed."
+  expiry="$(sed -n '2p' "$token" 2>/dev/null | tr -dc '0-9')"; now="$(date +%s)"
+  if [ -n "$expiry" ]; then
+    [ "$now" -gt "$expiry" ] && { rm -f "$token"; deny "Approval for '$planfile' has expired (10 min TTL). Ask the human to approve again."; }
+    if mv "$token" "$used" 2>/dev/null; then   # single use: the rename is atomic, the first delivery wins
+      allow_with_reason "Human-approved plan $planfile (sha256 ${sha:0:12}) applied once; approval consumed."
+    fi
+  elif [ -f "$token" ]; then
+    rm -f "$token"; deny "Approval file for '$planfile' is malformed. Ask the human to approve again."
+  fi
+  # otherwise a concurrent delivery consumed the token between our two looks; the .used check below decides
+fi
+if [ -f "$used" ]; then
+  age=$(( $(date +%s) - $(stat -c %Y "$used" 2>/dev/null || stat -f %m "$used" 2>/dev/null || echo 0) ))
+  if [ "$REPLAY" -gt 0 ] && [ "$age" -le "$REPLAY" ]; then
+    allow_with_reason "Human-approved plan $planfile (sha256 ${sha:0:12}): same tool call delivered again ${age}s after the approval was consumed."
+  fi
+  rm -f "$used"
 fi
 if attended; then
   # In-session approval: force the permission prompt and put the plan summary in front of the human.
