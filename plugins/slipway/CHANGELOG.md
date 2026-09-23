@@ -1,3 +1,9 @@
+## [1.1.2](https://github.com/integranz/slipway/compare/v1.1.1...v1.1.2) (2026-09-23)
+
+### Bug Fixes
+
+* **secrets:** Key Vault secret values are a listed human step; launch and deploy check them; guard gates az keyvault secret ([#8](https://github.com/integranz/slipway/issues/8)) ([85fa7e7](https://github.com/integranz/slipway/commit/85fa7e77b4d66e35ad235d539f702c6540a66fe9))
+
 ## [1.1.1](https://github.com/integranz/slipway/compare/v1.1.0...v1.1.1) (2026-09-22)
 
 ### Bug Fixes
