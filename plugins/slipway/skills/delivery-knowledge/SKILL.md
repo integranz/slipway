@@ -1,6 +1,6 @@
 ---
 name: delivery-knowledge
-description: Reference knowledge for delivery decisions: Azure Container Apps vs Container Instances constraints, Docker Hardened Images multi-stage patterns per stack, GitHub Actions with OIDC to Azure, NBGV and semantic-release versioning, Key Vault secret handling, and verification recipes. Loaded by the execute and verify sub-agents.
+description: "Reference knowledge for delivery decisions: Azure Container Apps vs Container Instances constraints, Docker Hardened Images multi-stage patterns per stack, GitHub Actions with OIDC to Azure, NBGV and semantic-release versioning, Key Vault secret handling, and verification recipes. Loaded by the execute and verify sub-agents."
 user-invocable: false
 ---
 

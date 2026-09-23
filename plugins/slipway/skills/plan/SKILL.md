@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Run terraform fmt, validate and plan for one infrastructure layer of this repository (foundation, or one app's module) and summarise the changes. Never applies; tells the human exactly how to approve and apply.
+description: "Run terraform fmt, validate and plan for one infrastructure layer of this repository (foundation, or one app's module) and summarise the changes. Never applies; tells the human exactly how to approve and apply."
 disable-model-invocation: true
 allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/scaffold.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/app-info.cjs" *), Bash(az account show *), Bash(terraform -chdir=* init *), Bash(terraform -chdir=* fmt *), Bash(terraform -chdir=* validate *), Bash(terraform -chdir=* plan *), Bash(terraform -chdir=* show *), Bash(terraform -chdir=* output *), Bash(terraform -chdir=* providers *), Bash(git status *), Bash(git rev-parse *)
 ---

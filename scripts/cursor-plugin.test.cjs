@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const yaml = require(path.join(__dirname, "..", "plugins", "slipway", "scripts", "lib", "js-yaml.min.js"));
 const R = path.join(__dirname, "..");
 const P = path.join(R, "plugins", "slipway");
 const read = (f) => fs.readFileSync(f, "utf8");
@@ -137,5 +138,22 @@ test("skills follow the Agent Skills format Cursor loads (name + description fro
     const fm = frontmatter(read(path.join(dir, s, "SKILL.md")));
     assert.equal(fm.name, s, `${s}: name matches folder`);
     assert.ok(fm.description && fm.description.length > 20, `${s}: description`);
+  }
+});
+
+test("every frontmatter Cursor loads is strict YAML with a string description (lenient Claude Code parsing hid 4 dropped skills)", () => {
+  const files = [
+    ...fs.readdirSync(path.join(P, "skills")).map((s) => path.join(P, "skills", s, "SKILL.md")),
+    ...fs.readdirSync(path.join(P, "agents")).map((a) => path.join(P, "agents", a)),
+    ...fs.readdirSync(path.join(P, "cursor", "agents")).map((a) => path.join(P, "cursor", "agents", a)),
+    ...fs.readdirSync(path.join(P, "cursor", "rules")).map((r) => path.join(P, "cursor", "rules", r)),
+  ];
+  for (const f of files) {
+    const m = read(f).match(/^---\n([\s\S]*?)\n---\n/);
+    assert.ok(m, `${f}: frontmatter`);
+    let fm;
+    assert.doesNotThrow(() => { fm = yaml.load(m[1]); }, `${f}: strict YAML`);
+    assert.equal(typeof fm.description, "string", `${f}: description is a string`);
+    assert.ok(fm.description.length > 20, `${f}: description`);
   }
 });

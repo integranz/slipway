@@ -18,7 +18,7 @@ This repo is the source of the **slipway** plugin (Claude Code and Cursor) and i
 | `.releaserc.json`, `.github/workflows/release.yml` | This repo versions itself with semantic-release (Conventional Commits) |
 
 ## I want to…
-- **work on a skill** → `plugins/slipway/skills/<name>/SKILL.md` (Agent Skills format, loaded by Claude Code and Cursor); test with `claude --plugin-dir ./plugins/slipway`
+- **work on a skill** → `plugins/slipway/skills/<name>/SKILL.md` (Agent Skills format, loaded by Claude Code and Cursor; the frontmatter must be **strict YAML**: quote a `description` that contains `: ` or Cursor drops the skill silently; `npm test` checks); test with `claude --plugin-dir ./plugins/slipway`
 - **change a guardrail** → `plugins/slipway/hooks/` (one implementation for both hosts); run `plugins/slipway/hooks/test-hooks.sh` and `plugins/slipway/cursor/hooks/test-cursor-hooks.sh` before committing
 - **change a sub-agent or an MCP server** → edit `plugins/slipway/agents/*.md` or `.mcp.json`, then `npm run build:cursor` (the Cursor copies are generated; CI fails when they are stale)
 - **test in Cursor** → `npm run install:cursor-local` (plugin folder + `~/.cursor/hooks.json` entries), reload Cursor, `echo approve-apply-probe` must be blocked; read the *Hooks* output channel when it is not

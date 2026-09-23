@@ -1,6 +1,6 @@
 ---
 name: explore
-description: Read-only exploration sub-agent. Use to gather facts before a change or a decision: discover apps, entry points, ports, health endpoints, test commands, existing Dockerfiles, workflows and Terraform in a repository; read CI job logs to diagnose a failed run; check what a file, config or pipeline actually does. Returns evidence with file paths and line numbers plus an explicit list of unknowns. Never edits files, never runs mutating commands.
+description: "Read-only exploration sub-agent. Use to gather facts before a change or a decision: discover apps, entry points, ports, health endpoints, test commands, existing Dockerfiles, workflows and Terraform in a repository; read CI job logs to diagnose a failed run; check what a file, config or pipeline actually does. Returns evidence with file paths and line numbers plus an explicit list of unknowns. Never edits files, never runs mutating commands."
 tools: Read, Grep, Glob, Bash, WebFetch
 disallowedTools: Edit, Write, NotebookEdit, Agent
 model: inherit

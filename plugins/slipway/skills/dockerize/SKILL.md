@@ -1,6 +1,6 @@
 ---
 name: dockerize
-description: Build the hardened multi-stage container image for one app from the slipway templates, run it locally, and prove it answers its health endpoint with the expected version as a non-root user.
+description: "Build the hardened multi-stage container image for one app from the slipway templates, run it locally, and prove it answers its health endpoint with the expected version as a non-root user."
 disable-model-invocation: true
 allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Agent, Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/scaffold.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" *), Bash(nbgv get-version *), Bash(git rev-parse *), Bash(docker build *), Bash(docker run *), Bash(docker rm *), Bash(docker stop *), Bash(docker image inspect *), Bash(docker inspect *), Bash(docker top *), Bash(docker logs *), Bash(docker images *), Bash(docker compose *), Bash(curl *), Bash(sleep *)
 ---

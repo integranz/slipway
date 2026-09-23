@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: Use when the user asks to onboard, containerise, "set up delivery", CI/CD, deployment or infrastructure for a repository, to run the ADLC intake, or to change delivery options (cloud, compute, registry, runner, versioning, branching, tracker, secret store, base image). Interviews the user for the options that shape generated files, classifies the apps with the explore sub-agent, writes .slipway/config.yaml, scaffolds the repo-side files deterministically and opens a tracking ticket.
+description: "Use when the user asks to onboard, containerise, \"set up delivery\", CI/CD, deployment or infrastructure for a repository, to run the ADLC intake, or to change delivery options (cloud, compute, registry, runner, versioning, branching, tracker, secret store, base image). Interviews the user for the options that shape generated files, classifies the apps with the explore sub-agent, writes .slipway/config.yaml, scaffolds the repo-side files deterministically and opens a tracking ticket."
 allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Write, Edit, Agent, AskUserQuestion, Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/options.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" *), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/scaffold.cjs" *), Bash(git status *), Bash(git rev-parse *), Bash(git remote *), Bash(git diff *)
 ---
 
