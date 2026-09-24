@@ -39,9 +39,11 @@ expect_msg() { # name adapter regex input : the user_message must match
 echo "shell.sh (beforeShellExecution)"
 expect "plain command allowed"                    shell.sh allow "$(shell_in 'echo hello' "$T")"
 expect "terraform plan allowed"                   shell.sh allow "$(shell_in 'terraform plan -out=tfplan.dev' "$T/infra/foundation")"
-expect "apply without token denied"               shell.sh deny  "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")"
-expect "apply without token denied even attended" shell.sh deny  "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")" SLIPWAY_SESSION_ATTENDED=1
-expect_msg "denial carries the token instructions" shell.sh 'approve-apply' "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")"
+expect "apply without token, IDE session -> ask (prompt with plan summary)" shell.sh ask "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")"
+expect "apply without token, background agent -> deny"   shell.sh deny  "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")" SLIPWAY_SESSION_ATTENDED=0
+expect "apply without token, apply_gate=token -> deny"    shell.sh deny  "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")" SLIPWAY_APPLY_GATE=token
+out="$(printf '%s' "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")" | SLIPWAY_SESSION_ATTENDED=0 bash "$H/shell.sh" 2>/dev/null)"
+if printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("user_message",""))' | grep -q 'approve-apply'; then pass=$((pass+1)); echo "  ok   background denial carries the token instructions"; else fail=$((fail+1)); echo "  FAIL background denial message: $out"; fi
 expect "destroy denied"                           shell.sh deny  "$(shell_in 'terraform destroy' "$T/infra/foundation")"
 expect "apply -auto-approve denied"               shell.sh deny  "$(shell_in 'terraform apply -auto-approve tfplan.dev' "$T/infra/foundation")"
 expect "apply in infra/apps/<app> denied"         shell.sh deny  "$(shell_in 'terraform apply tfplan.dev' "$T/infra/apps/api")"
@@ -49,7 +51,7 @@ expect "agent cannot self-approve"                shell.sh deny  "$(shell_in "ba
 expect "liveness probe is blocked"                shell.sh deny  "$(shell_in 'echo approve-apply-probe' "$T")"
 bash "$P/scripts/approve-apply.sh" "$T/infra/foundation/tfplan.dev" >/dev/null
 expect "apply with human token allowed"           shell.sh allow "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")"
-expect "token is single-use"                      shell.sh deny  "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")"
+expect "token is single-use (next call asks again)" shell.sh ask   "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")"
 expect "docker push :latest denied"               shell.sh deny  "$(shell_in 'docker push acr.azurecr.io/api:latest' "$T")"
 expect "docker push semver allowed"               shell.sh allow "$(shell_in 'docker push acr.azurecr.io/api:1.2.3' "$T")"
 expect "git add .env denied"                      shell.sh deny  "$(shell_in 'git add .env' "$T")"
@@ -92,13 +94,13 @@ expect "non-edit tool passes through"             write.sh allow "$(write_in She
 echo "pretooluse.sh (generic preToolUse, the event Cursor 3.21.16 fires for every tool)"
 expect "Shell: probe blocked"                     pretooluse.sh deny  "$(pre_in Shell '{"command":"echo approve-apply-probe","cwd":"","timeout":30000}' "$T" p1)"
 expect "Shell: plain command allowed"             pretooluse.sh allow "$(pre_in Shell '{"command":"echo hello","cwd":"","timeout":30000}' "$T" p2)"
-expect "Shell: empty cwd -> workspace root (apply in foundation denied, not 'unknown layout')" pretooluse.sh deny "$(pre_in Shell '{"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":"","timeout":30000}' "$T" p3)"
-expect_msg "Shell: denial names the token"        pretooluse.sh 'approve-apply' "$(pre_in Shell '{"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":"","timeout":30000}' "$T" p4)"
+expect "Shell: empty cwd -> workspace root (apply in foundation resolves the layer: ask, not 'unknown layout')" pretooluse.sh ask "$(pre_in Shell '{"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":"","timeout":30000}' "$T" p3)"
+expect_msg "Shell: the ask names the plan and the layer" pretooluse.sh 'tfplan.dev in infra/foundation' "$(pre_in Shell '{"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":"","timeout":30000}' "$T" p4)"
 clear_cache; bash "$P/scripts/approve-apply.sh" "$T/infra/foundation/tfplan.dev" >/dev/null
 expect "Shell: approved apply allowed"            pretooluse.sh allow "$(pre_in Shell '{"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":"","timeout":30000}' "$T" p5)"
 expect "same call through beforeShellExecution replays allow (token consumed once)" shell.sh allow "$(python3 -c 'import json,sys; print(json.dumps({"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":sys.argv[1],"conversation_id":"c-p5"}))' "$T")"
 sleep 4
-expect "after the cache window the same command is judged again (denied)" shell.sh deny "$(python3 -c 'import json,sys; print(json.dumps({"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":sys.argv[1],"conversation_id":"c-p5"}))' "$T")"
+expect "after the cache window the same command is judged again (ask, no token left)" shell.sh ask "$(python3 -c 'import json,sys; print(json.dumps({"command":"cd infra/foundation && terraform apply tfplan.dev","cwd":sys.argv[1],"conversation_id":"c-p5"}))' "$T")"
 expect "Read: seed file denied"                   pretooluse.sh deny  "$(pre_in Read '{"path":".slipway/.env"}' "$T" p6)"
 expect "Read: unknown input shape allowed"        pretooluse.sh allow "$(pre_in Read '{"something":"else"}' "$T" p7)"
 expect "Write: secret literal denied"             pretooluse.sh deny  "$(pre_in Write '{"path":"infra/foundation/main.tf","contents":"client_secret = \"S3cr3tValue1234567890\""}' "$T" p8)"

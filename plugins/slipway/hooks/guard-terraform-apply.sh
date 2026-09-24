@@ -72,6 +72,17 @@ if [ -f "$used" ]; then
   fi
   rm -f "$used"
 fi
+# options.apply_gate: prompt (default) asks in an attended session; token always requires the human-made token.
+# SLIPWAY_APPLY_GATE overrides the repository setting (tests, stricter personal policy).
+apply_gate() {
+  case "${SLIPWAY_APPLY_GATE:-}" in token|prompt) printf '%s' "$SLIPWAY_APPLY_GATE"; return;; esac
+  if [ -f "$1/.slipway/config.yaml" ] && grep -Eq '^[[:space:]]*apply_gate:[[:space:]]*token([[:space:]]|$|#)' "$1/.slipway/config.yaml"; then printf 'token'; else printf 'prompt'; fi
+}
+if [ "$(apply_gate "$root")" = token ]; then
+  deny "options.apply_gate is 'token': every foundation apply needs a one-shot approval created by a human in their own terminal:
+  bash <plugin-root>/scripts/approve-apply.sh $planpath
+Then re-run this exact apply command within 10 minutes."
+fi
 if attended; then
   # In-session approval: force the permission prompt and put the plan summary in front of the human.
   summary="$(cd "$dir" 2>/dev/null && terraform show -no-color "$planfile" 2>/dev/null | grep -E '^(Plan:|No changes)' | head -1 || true)"

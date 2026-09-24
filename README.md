@@ -53,7 +53,7 @@ Cursor 3.21 does not load hooks from an installed plugin (they sit behind a feat
 **What differs in Cursor**
 | Topic | Claude Code | Cursor |
 |---|---|---|
-| Foundation `terraform apply` | attended session: forced permission prompt with the plan summary; unattended: approval token | always the approval token: you run `bash <plugin-root>/scripts/approve-apply.sh <planfile>` in your own terminal, then the agent applies (Cursor documents the hook `ask` decision as not enforced, so a prompt cannot be relied on) |
+| Foundation `terraform apply` | attended session: forced permission prompt with the plan summary; unattended: approval token | same: the hook asks and Cursor prompts you (verified live, 1.4.0). Background agents and repositories with `options.apply_gate: token` use the token: `bash <plugin-root>/scripts/approve-apply.sh <planfile>` in your own terminal |
 | Cloud/GitHub administration, secret writes | forced prompt naming the action | the hook returns `ask` with the reason; Cursor's own command approval is the gate. Do not run slipway with auto-run ("Run Everything") enabled |
 | Read-only sub-agents | hook blocks mutating commands by `agent_type` | `readonly: true` in the subagent definition (Cursor sends no agent type to hooks) |
 | Seed file `.slipway/.env` | Read tool denied, printing denied | `beforeReadFile` denies the read, shell guards deny printing |
@@ -128,7 +128,7 @@ Details, defaults and safety notes per command: `docs/COMMAND-CATALOG.md`.
 | Cursor: slipway lists fewer skills or subagents than expected | a frontmatter that is not strict YAML (Cursor drops the component silently; Claude Code accepts it) | `npm test` fails on it since 1.1.2 (strict-YAML frontmatter test); quote the `description` |
 | Cursor: slipway missing from Settings → Plugins after `install:cursor-local` | window not reloaded, or local plugin imports disabled by the team admin | *Developer: Reload Window*; ask the admin to allow local plugin imports, or use the team marketplace import |
 | Cursor: the probe prints `approve-apply-probe` | either the model answered the text without running a terminal command (no tool call, so no hook), or the hooks are not registered (Cursor 3.21 loads no plugin hooks) | ask for a real run (`echo approve-apply-probe && date`); check the *Hooks* output channel for `Loaded 5 user hook(s)`; otherwise `npm run install:cursor-local` |
-| Cursor: "apply needs a human approval token" although you are watching | by design: Cursor cannot force a permission prompt from a hook | `bash <plugin-root>/scripts/approve-apply.sh <planfile>` in your terminal, then let the agent retry |
+| Cursor: "apply needs a human approval token" although you are watching | plugin older than 1.4.0, a background agent, or `options.apply_gate: token` | update the plugin (Cursor: refresh the marketplace); otherwise `bash <plugin-root>/scripts/approve-apply.sh <planfile>` in your terminal, then let the agent retry |
 | Cursor: every shell command is blocked with "guard script missing" or "failed" | adapter cannot find or run the guards (moved folder, no `python3`) | reinstall with `npm run install:cursor-local`; install `python3` |
 
 ## Develop and release
