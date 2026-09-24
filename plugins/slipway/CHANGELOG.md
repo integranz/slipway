@@ -1,3 +1,9 @@
+## [1.4.2](https://github.com/integranz/slipway/compare/v1.4.1...v1.4.2) (2026-09-24)
+
+### Bug Fixes
+
+* **cursor:** GitHub MCP token from the environment so Cloud Agents can authenticate ([#17](https://github.com/integranz/slipway/issues/17)) ([91f7659](https://github.com/integranz/slipway/commit/91f7659b7eee16bc6d8bfeaf9aba2714806ae27a))
+
 ## [1.4.1](https://github.com/integranz/slipway/compare/v1.4.0...v1.4.1) (2026-09-24)
 
 ### Bug Fixes
