@@ -1,3 +1,9 @@
+## [1.4.1](https://github.com/integranz/slipway/compare/v1.4.0...v1.4.1) (2026-09-24)
+
+### Bug Fixes
+
+* **cursor:** user-level hook entries go through a shim that survives plugin removal or refresh ([#16](https://github.com/integranz/slipway/issues/16)) ([5fcae18](https://github.com/integranz/slipway/commit/5fcae187aee17ad78ac91e047ba328dad7b9c4d0))
+
 ## [1.4.0](https://github.com/integranz/slipway/compare/v1.3.0...v1.4.0) (2026-09-24)
 
 ### Features
