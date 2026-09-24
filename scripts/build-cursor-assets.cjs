@@ -59,11 +59,12 @@ for (const [name, def] of Object.entries(mcp.mcpServers || {})) {
   const { type, ...rest } = def; // eslint-disable-line no-unused-vars
   servers[name] = rest;
 }
-// GitHub's remote MCP server does not support OAuth dynamic client registration, which Cursor's OAuth client requires
-// ("Incompatible auth server: does not support dynamic client registration", Cursor 3.21.16, 2026-09-23). Claude Code
-// completes that OAuth; Cursor needs a token instead: the plugin variable GITHUB_MCP_TOKEN (Plugins → Configure) is
-// substituted here. Without a value the server stays disconnected and slipway falls back to the gh CLI.
-if (servers.github && servers.github.url) servers.github.headers = { Authorization: "Bearer ${GITHUB_MCP_TOKEN}" };
+// GitHub's remote MCP server: the Cursor desktop (3.21.18) completes OAuth on its own, but a Cursor Cloud Agent has no
+// browser and falls back to OAuth dynamic client registration, which GitHub rejects (HTTP 422, "incompatible auth
+// server"; observed 2026-09-24). Cloud Agents expose their secrets as environment variables, so the header reads
+// ${env:GITHUB_MCP_TOKEN} (Cursor's mcp.json interpolation): set that secret to a fine-grained PAT (Actions read/write,
+// Metadata read) in the cloud environment. Unset locally, OAuth proceeds as before; without either, gh CLI is the fallback.
+if (servers.github && servers.github.url) servers.github.headers = { Authorization: "Bearer ${env:GITHUB_MCP_TOKEN}" };
 write(path.join(P, "cursor", "mcp.json"), JSON.stringify({ mcpServers: servers }, null, 2) + "\n");
 
 if (check && stale.length) {

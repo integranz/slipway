@@ -6,7 +6,7 @@
     "github": {
       "url": "https://api.githubcopilot.com/mcp/x/actions",
       "headers": {
-        "Authorization": "Bearer ${GITHUB_MCP_TOKEN}"
+        "Authorization": "Bearer ${env:GITHUB_MCP_TOKEN}"
       }
     },
     "azure": {
