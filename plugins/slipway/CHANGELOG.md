@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/integranz/slipway/compare/v1.3.0...v1.4.0) (2026-09-24)
+
+### Features
+
+* **hooks:** apply_gate option — the foundation apply asks for permission in Cursor too ([#14](https://github.com/integranz/slipway/issues/14)) ([d2ca707](https://github.com/integranz/slipway/commit/d2ca7073b92c35d286d80c77da7141472f9ac63c))
+
 ## [1.3.0](https://github.com/integranz/slipway/compare/v1.2.0...v1.3.0) (2026-09-24)
 
 ### Features
