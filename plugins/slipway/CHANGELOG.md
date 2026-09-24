@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/integranz/slipway/compare/v1.2.0...v1.3.0) (2026-09-24)
+
+### Features
+
+* **registry:** discover shareable registries in the subscription and offer them in the interview ([#13](https://github.com/integranz/slipway/issues/13)) ([0c97ee7](https://github.com/integranz/slipway/commit/0c97ee7ed8baa064cd9044ee8e4e42178fe609b4))
+
 ## [1.2.0](https://github.com/integranz/slipway/compare/v1.1.5...v1.2.0) (2026-09-24)
 
 ### Features
