@@ -4,7 +4,10 @@
       "url": "https://mcp.atlassian.com/v2/mcp"
     },
     "github": {
-      "url": "https://api.githubcopilot.com/mcp/x/actions"
+      "url": "https://api.githubcopilot.com/mcp/x/actions",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_MCP_TOKEN}"
+      }
     },
     "azure": {
       "command": "npx",

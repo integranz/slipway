@@ -59,6 +59,11 @@ for (const [name, def] of Object.entries(mcp.mcpServers || {})) {
   const { type, ...rest } = def; // eslint-disable-line no-unused-vars
   servers[name] = rest;
 }
+// GitHub's remote MCP server does not support OAuth dynamic client registration, which Cursor's OAuth client requires
+// ("Incompatible auth server: does not support dynamic client registration", Cursor 3.21.16, 2026-09-23). Claude Code
+// completes that OAuth; Cursor needs a token instead: the plugin variable GITHUB_MCP_TOKEN (Plugins → Configure) is
+// substituted here. Without a value the server stays disconnected and slipway falls back to the gh CLI.
+if (servers.github && servers.github.url) servers.github.headers = { Authorization: "Bearer ${GITHUB_MCP_TOKEN}" };
 write(path.join(P, "cursor", "mcp.json"), JSON.stringify({ mcpServers: servers }, null, 2) + "\n");
 
 if (check && stale.length) {
