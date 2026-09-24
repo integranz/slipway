@@ -26,9 +26,7 @@ test("plugin manifest: required and declared components exist", () => {
   assert.equal(m.author.name, "Abdelazim Ali");
   assert.equal(m.license, "MIT");
   for (const key of ["skills", "agents", "rules", "hooks", "mcpServers"]) assert.ok(fs.existsSync(path.join(P, m[key])), `${key}: ${m[key]} exists`);
-  assert.equal(m.variables.type, "object");
-  assert.ok(m.variables.properties.GITHUB_MCP_TOKEN, "declares the GitHub MCP token variable used by cursor/mcp.json");
-  assert.ok(!(m.variables.required || []).includes("GITHUB_MCP_TOKEN"), "the token is optional: slipway works with the gh CLI");
+  assert.equal(m.variables, undefined, "no plugin variables: they need a Teams dashboard; the GitHub token comes from the environment instead");
   assert.ok(fs.statSync(path.join(P, m.skills)).isDirectory());
   assert.ok(fs.statSync(path.join(P, m.agents)).isDirectory());
   assert.ok(fs.statSync(path.join(P, m.rules)).isDirectory());
@@ -117,7 +115,7 @@ test("Cursor MCP config: same servers as .mcp.json without Claude's type key", (
     assert.equal(def.type, undefined, `${name}: no type`);
     assert.ok(def.url || def.command, `${name}: url or command`);
     if (c[name].url) assert.equal(def.url, c[name].url);
-    if (name === "github") assert.equal(def.headers.Authorization, "Bearer ${GITHUB_MCP_TOKEN}", "GitHub MCP authenticates with the plugin variable in Cursor");
+    if (name === "github") assert.equal(def.headers.Authorization, "Bearer ${env:GITHUB_MCP_TOKEN}", "GitHub MCP reads the token from the environment (Cloud Agents secrets); desktop OAuth applies when unset");
     if (c[name].args) assert.deepEqual(def.args, c[name].args);
     const text = JSON.stringify(def);
     assert.doesNotMatch(text, /(ghp_|github_pat_|Bearer [A-Za-z0-9])/, `${name}: no token literal`);

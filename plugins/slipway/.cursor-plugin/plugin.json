@@ -22,15 +22,5 @@
   "agents": "cursor/agents",
   "rules": "cursor/rules",
   "hooks": "cursor/hooks.json",
-  "mcpServers": "cursor/mcp.json",
-  "variables": {
-    "type": "object",
-    "properties": {
-      "GITHUB_MCP_TOKEN": {
-        "type": "string",
-        "title": "GitHub token for the GitHub MCP server (optional)",
-        "description": "Fine-grained personal access token with Actions (read and write) and Metadata (read) on the repositories slipway delivers. Cursor cannot complete GitHub's OAuth for this server (no dynamic client registration), so it authenticates with this token instead. Leave empty to use the gh CLI only."
-      }
-    }
-  }
+  "mcpServers": "cursor/mcp.json"
 }
