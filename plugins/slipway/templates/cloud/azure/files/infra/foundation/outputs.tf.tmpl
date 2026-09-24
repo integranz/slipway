@@ -1,7 +1,7 @@
 output "resource_group_name" { value = data.azurerm_resource_group.env.name }
 output "location" { value = data.azurerm_resource_group.env.location }
-output "acr_login_server" { value = azurerm_container_registry.this.login_server }
-output "acr_id" { value = azurerm_container_registry.this.id }
+output "acr_login_server" { value = <%#eq options.registry_scope "existing"%>data.<%/eq%>azurerm_container_registry.this.login_server }
+output "acr_id" { value = <%#eq options.registry_scope "existing"%>data.<%/eq%>azurerm_container_registry.this.id }
 output "key_vault_id" { value = azurerm_key_vault.this.id }
 output "key_vault_uri" { value = azurerm_key_vault.this.vault_uri }
 output "identity_id" { value = azurerm_user_assigned_identity.apps.id }

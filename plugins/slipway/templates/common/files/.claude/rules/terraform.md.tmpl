@@ -4,7 +4,7 @@ paths:
 ---
 # Terraform rules
 
-- Two layers, two lifecycles. `infra/foundation` (registry, key vault, identity, logs, role assignments<%#eq options.compute "aca"%>, the Container Apps environment<%/eq%>) changes rarely and is applied by a human after `/slipway:plan dev --layer foundation` and an approval token. `infra/apps/<app>` (one root module and one state per app: that app's compute and image tag) is applied only by that app's CD workflow.
+- Two layers, two lifecycles. `infra/foundation` (<%#eq options.registry_scope "existing"%>shared registry referenced, never created or destroyed here<%else%>registry<%/eq%>, key vault, identity, logs, role assignments<%#eq options.compute "aca"%>, the Container Apps environment<%/eq%>) changes rarely and is applied by a human after `/slipway:plan dev --layer foundation` and an approval token. `infra/apps/<app>` (one root module and one state per app: that app's compute and image tag) is applied only by that app's CD workflow.
 - Always `fmt`, `validate`, then `plan -out=<planfile>`; apply only that exact plan file. Never `-auto-approve`, never `destroy` from a session.
 - No secret values in `.tf`, `.tfvars` or state-adjacent files. Secrets are created out of band in <% derived.option_labels.secret_store %> and referenced by id; runtime access is via managed identity.
 - Compute option `<% options.compute %>`: the per-app root modules are rendered from `templates/compute/<% options.compute %>/per-app`. Cross-app resources belong to `infra/foundation`; an app module never references another app's module or state.

@@ -5,7 +5,7 @@ data "azurerm_resource_group" "env" {
 
 data "azurerm_container_registry" "this" {
   name                = local.acr_name
-  resource_group_name = local.resource_group_name
+  resource_group_name = <%#eq options.registry_scope "existing"%>local.acr_resource_group_name<%else%>local.resource_group_name<%/eq%>
 }
 
 data "azurerm_user_assigned_identity" "apps" {

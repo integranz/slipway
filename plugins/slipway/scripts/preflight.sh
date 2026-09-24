@@ -39,7 +39,7 @@ print(out)
 PY
 }
 OWNER="$(yget github.owner)"; REPO_NAME="$(yget github.repo)"; ENV="$(jget cd_environment)"; [ -n "$ENV" ] || ENV=dev
-BASE_IMAGE="$(yget options.base_image)"; TRACKER="$(yget options.tracker)"; ACR="$(yget azure.acr_name)"
+BASE_IMAGE="$(yget options.base_image)"; TRACKER="$(yget options.tracker)"; ACR="$(yget azure.acr_name)"; KV="$(yget azure.key_vault_name)"
 
 echo "Tools"
 for t in az gh docker terraform node git; do command -v "$t" >/dev/null 2>&1 && ok "$t" "$(command -v "$t")" || miss "$t" "install $t"; done
@@ -76,7 +76,8 @@ if az account show >/dev/null 2>&1 && [ -x .slipway/setup-azure.sh ]; then
   echo "Azure prerequisites (dry run of .slipway/setup-azure.sh)"
   DRY="$(bash .slipway/setup-azure.sh 2>/dev/null)"; N="$(printf '%s\n' "$DRY" | grep -cE '^\s+would ' || true)"
   [ "${N:-0}" = "0" ] && ok "setup-azure.sh" "nothing to change" || miss "setup-azure.sh" "$N change(s) pending: bash .slipway/setup-azure.sh --apply --set-github-secrets"
-  [ -n "$ACR" ] && { az acr show -n "$ACR" >/dev/null 2>&1 && ok "foundation applied (registry $ACR exists)" || miss "foundation layer" "/slipway:plan <env> --layer foundation, then approve the apply"; }
+  [ -n "$KV" ] && { az keyvault show -n "$KV" >/dev/null 2>&1 && ok "foundation applied (key vault $KV exists)" || miss "foundation layer" "/slipway:plan <env> --layer foundation, then approve the apply"; }
+  [ "$(yget options.registry_scope)" = "existing" ] && [ -n "$ACR" ] && { az acr show -n "$ACR" >/dev/null 2>&1 && ok "shared registry $ACR exists" || miss "shared registry $ACR" "options.registry_scope=existing names a registry that does not exist (or you cannot read it)"; }
 fi
 [ "$TRACKER" = "none" ] && skip "tracker" "disabled" || echo "Tracker $TRACKER: the skill checks the MCP grant itself (getAccessibleAtlassianResources)"
 echo; [ "$missing" = 0 ] && { echo "preflight: nothing missing"; exit 0; } || { echo "preflight: $missing item(s) missing"; exit 3; }

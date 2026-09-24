@@ -18,3 +18,9 @@ locals {
     generator   = "slipway"
   }
 }
+<%#eq options.registry_scope "existing"%>
+# Shared registry (options.registry_scope: existing): looked up in its own resource group.
+locals {
+  acr_resource_group_name = "<% derived.acr_resource_group %>"
+}
+<%/eq%>
