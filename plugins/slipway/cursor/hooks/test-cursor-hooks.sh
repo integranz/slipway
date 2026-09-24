@@ -124,18 +124,27 @@ if printf '%s' "$out" | grep -q '"permission": "deny"'; then pass=$((pass+1)); e
 INST="$P/../../scripts/cursor-local-install.sh"
 if [ -f "$INST" ]; then
   printf '{"version":1,"hooks":{"preToolUse":[{"command":"node /elsewhere/other-hook.cjs"}]}}\n' > "$T/user-hooks.json"
-  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" bash "$INST" >/dev/null 2>&1
-  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" bash "$INST" >/dev/null 2>&1
+  # an old-style direct entry must be replaced as well
+  python3 -c 'import json,sys; json.dump({"version":1,"hooks":{"preToolUse":[{"command":"node /elsewhere/other-hook.cjs"},{"command":"bash \"/old/plugins/local/slipway/cursor/hooks/pretooluse.sh\"","failClosed":True}]}}, open(sys.argv[1],"w"))' "$T/user-hooks.json"
+  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" CURSOR_USER_SHIM_DIR="$T/shim" bash "$INST" >/dev/null 2>&1
+  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" CURSOR_USER_SHIM_DIR="$T/shim" bash "$INST" >/dev/null 2>&1
   if python3 -c '
 import json,sys; c=json.load(open(sys.argv[1])); h=c["hooks"]
-ours=[x for ev in h.values() for x in ev if "/slipway/cursor/hooks/" in x["command"]]
+ours=[x for ev in h.values() for x in ev if "cursor-hooks.sh" in x["command"]]
 assert len(ours)==5, ours
+assert not any("/old/plugins/local/" in x["command"] for ev in h.values() for x in ev), "old direct entry replaced"
 assert any("other-hook" in x["command"] for x in h["preToolUse"]), "foreign entry kept"
-assert all(x.get("failClosed") for x in ours if "session-start" not in x["command"]), "failClosed"
-assert sys.argv[2]+"/slipway/cursor/hooks/pretooluse.sh" in json.dumps(c), "absolute path to the local plugin"' "$T/user-hooks.json" "$T/local"; then pass=$((pass+1)); echo "  ok   install script merges 5 hook entries once (idempotent), keeps foreign entries"; else fail=$((fail+1)); echo "  FAIL install script merge: $(cat "$T/user-hooks.json")"; fi
-  [ -f "$T/local/slipway/cursor/hooks/pretooluse.sh" ] && { pass=$((pass+1)); echo "  ok   install script copied the plugin"; } || { fail=$((fail+1)); echo "  FAIL plugin copy missing"; }
-  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" bash "$INST" --uninstall >/dev/null 2>&1
-  if [ ! -d "$T/local/slipway" ] && ! grep -q slipway "$T/user-hooks.json" && grep -q other-hook "$T/user-hooks.json"; then pass=$((pass+1)); echo "  ok   --uninstall removes the folder and only our entries"; else fail=$((fail+1)); echo "  FAIL uninstall"; fi
+assert all(x.get("failClosed") for x in ours if " session-start" not in x["command"]), "failClosed"
+assert ("bash \"%s/cursor-hooks.sh\" pretooluse" % sys.argv[2]) in json.dumps(c).replace("\\\"","\""), "entries go through the shim"' "$T/user-hooks.json" "$T/shim"; then pass=$((pass+1)); echo "  ok   install script writes 5 shim entries once (idempotent), replaces old direct entries, keeps foreign ones"; else fail=$((fail+1)); echo "  FAIL install script merge: $(cat "$T/user-hooks.json")"; fi
+  [ -f "$T/local/slipway/cursor/hooks/pretooluse.sh" ] && [ -x "$T/shim/cursor-hooks.sh" ] && { pass=$((pass+1)); echo "  ok   install script copied the plugin and wrote the shim"; } || { fail=$((fail+1)); echo "  FAIL plugin copy or shim missing"; }
+  # the shim survives the removal of the local folder: no plugin anywhere -> allow (guards inactive), with a plugin -> guards
+  rm -rf "$T/local/slipway"
+  out="$(printf '{"command":"echo approve-apply-probe","cwd":"/tmp"}' | HOME="$T/home-empty" bash "$T/shim/cursor-hooks.sh" shell)"
+  [ "$out" = '{"permission":"allow"}' ] && { pass=$((pass+1)); echo "  ok   user-level shim without any plugin copy allows instead of failing closed"; } || { fail=$((fail+1)); echo "  FAIL shim without plugin: $out"; }
+  out="$(printf '{"command":"echo approve-apply-probe","cwd":"/tmp","conversation_id":"c-shim3"}' | SLIPWAY_PLUGIN_ROOT="$P" bash "$T/shim/cursor-hooks.sh" shell)"
+  printf '%s' "$out" | grep -q '"permission": "deny"' && { pass=$((pass+1)); echo "  ok   user-level shim with a plugin copy runs the guards"; } || { fail=$((fail+1)); echo "  FAIL shim with plugin: $out"; }
+  CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" CURSOR_USER_SHIM_DIR="$T/shim" bash "$INST" --uninstall >/dev/null 2>&1
+  if [ ! -d "$T/local/slipway" ] && [ ! -d "$T/shim" ] && ! grep -q 'cursor-hooks.sh' "$T/user-hooks.json" && grep -q other-hook "$T/user-hooks.json"; then pass=$((pass+1)); echo "  ok   --uninstall removes the folder, the shim and only our entries"; else fail=$((fail+1)); echo "  FAIL uninstall"; fi
 fi
 
 echo "session-start.sh"
