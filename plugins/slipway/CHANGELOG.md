@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/integranz/slipway/compare/v1.1.5...v1.2.0) (2026-09-24)
+
+### Features
+
+* **registry:** registry_scope option — use an existing Azure Container Registry shared by several repositories ([#12](https://github.com/integranz/slipway/issues/12)) ([e2fbf96](https://github.com/integranz/slipway/commit/e2fbf9668bf88398e738f34bd329740d1de7ce72))
+
 ## [1.1.5](https://github.com/integranz/slipway/compare/v1.1.4...v1.1.5) (2026-09-24)
 
 ### Bug Fixes
