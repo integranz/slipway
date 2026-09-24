@@ -48,7 +48,7 @@ dimensions:
     depends_on: registry
     options:
       per-repository: { status: implemented, label: "Own registry, created by this repository's foundation layer (default; the resource group is the security boundary)" }
-      existing:       { status: implemented, registry: acr, label: "Existing Azure Container Registry shared by several repositories: named in azure.acr_name (and azure.acr_resource_group when it lives elsewhere); the foundation layer references it and assigns AcrPush to this repository's CI/CD principal, AcrPull to the app identity and Reader for the app layer. The human applying the foundation needs role-assignment rights on that registry", note: "images stay namespaced <project>/<app>; a shared Container Apps environment or Log Analytics can follow the same pattern later" }
+      existing:       { status: implemented, registry: acr, label: "Existing Azure Container Registry shared by several repositories, chosen in the interview from the registries you can assign roles on (scripts/registries.cjs); named in azure.acr_name (and azure.acr_resource_group when it lives elsewhere); the foundation layer references it and assigns AcrPush to this repository's CI/CD principal, AcrPull to the app identity and Reader for the app layer. The human applying the foundation needs role-assignment rights on that registry", note: "images stay namespaced <project>/<app>; a shared Container Apps environment or Log Analytics can follow the same pattern later" }
 
   runner:
     question: Which CI/CD runner executes the pipelines?
