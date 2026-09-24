@@ -99,7 +99,7 @@ Tests: `bash plugins/slipway/cursor/hooks/test-cursor-hooks.sh`, 65 cases with C
 Wiring that this Cursor does load (both installed by default, both route to the same adapters):
 | Source | File | Written by | Runs from |
 |---|---|---|---|
-| User hooks | `~/.cursor/hooks.json` | `npm run install:cursor-local` (merged; foreign entries kept; `--uninstall` removes only ours) | `~/.cursor`; commands are absolute paths into `~/.cursor/plugins/local/slipway/cursor/hooks/` |
+| User hooks | `~/.cursor/hooks.json` | `npm run install:cursor-local` (merged; foreign entries kept; `--uninstall` removes only ours) | `~/.cursor`; since 1.4.1 the commands call the shim `~/.cursor/slipway/cursor-hooks.sh <adapter>`, which finds the plugin in the local folder, the marketplace cache or the Claude Code cache and allows (with a session-start warning) when none exists. Before 1.4.1 they pointed straight into the local folder: removing that folder from Cursor's UI left five fail-closed entries that blocked every tool call (seen 2026-09-24) |
 | Project hooks | `.cursor/hooks.json` + `.slipway/cursor-hooks.sh` in every slipway repository | the scaffold (common templates) | the repository root; the shim finds the plugin in `~/.cursor/plugins/local/slipway`, then the newest `~/.cursor/plugins/cache/*/slipway/*/`, then the Claude Code cache; without a plugin it **allows** and says so at session start (a teammate without slipway keeps a working Cursor) |
 | Plugin hooks | `cursor/hooks.json` in the plugin | the plugin | for Cursor builds that load plugin hooks; identical entries |
 
