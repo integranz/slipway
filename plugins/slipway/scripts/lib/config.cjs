@@ -6,7 +6,7 @@ const validateSchema = require("./validate-config.generated.cjs");
 const PLUGIN_ROOT = path.resolve(__dirname, "..", "..");
 const OPTIONS_PATH = path.join(PLUGIN_ROOT, "templates", "common", "slipway", "options.yaml");
 // Optional dimensions and the value they take when the config omits them.
-const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui", config_store: "env", database: "none", registry_scope: "per-repository" };
+const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui", config_store: "env", database: "none", registry_scope: "per-repository", apply_gate: "prompt" };
 
 function loadYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
 function loadOptions() { return loadYaml(OPTIONS_PATH); }
@@ -210,6 +210,7 @@ function derive(config, options, repoRoot) {
     env,
     plugin_version: pluginVersion(),
     registry_existing: config.options.registry_scope === "existing",
+    apply_gate: config.options.apply_gate,
     acr_resource_group: (config.azure && (config.azure.acr_resource_group || config.azure.resource_group)) || null,
     marketplace: { name: options.distribution.marketplace, repo: options.distribution.repo, plugin: options.distribution.plugin },
     registry_host: registryHost,

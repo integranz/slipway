@@ -108,6 +108,12 @@ dimensions:
       github-ui:  { status: implemented, label: "On the workflow run page in GitHub (Review deployments), by a required reviewer" }
       in-session: { status: implemented, label: "Also in the Claude Code session: after the plan summary, the agent approves the pending deployment through the GitHub API under the reviewer's own account, behind a forced permission prompt" }
 
+  apply_gate:
+    question: How is a local `terraform apply` of the foundation layer approved?
+    options:
+      prompt: { status: implemented, label: "In the session: the guard hook asks for permission with the plan summary and the human answers the prompt (Claude Code enforces it; Cursor shows its command approval, so keep auto-run off). Unattended sessions still need the token" }
+      token:  { status: implemented, label: "Always a one-shot token created by a human in a separate terminal (scripts/approve-apply.sh), even in attended sessions: for auto-run setups, shared machines or stricter policies" }
+
   pr_checks:
     question: How does an app's CI behave on pull requests that do not touch that app?
     options:

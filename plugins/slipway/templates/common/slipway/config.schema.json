@@ -155,6 +155,13 @@
             "existing"
           ],
           "description": "per-repository (default): the foundation layer creates the registry. existing: an Azure Container Registry shared by several repositories is referenced, never created or deleted; the foundation layer only assigns roles on it."
+        },
+        "apply_gate": {
+          "enum": [
+            "prompt",
+            "token"
+          ],
+          "description": "prompt (default): the apply guard asks in the session; token: a human-made approval token is always required."
         }
       }
     },

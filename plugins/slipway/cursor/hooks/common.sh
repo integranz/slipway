@@ -20,9 +20,9 @@
 # cwd; exit 2 = block with the reason on stderr; or a {"hookSpecificOutput":{"permissionDecision":..}} line on stdout).
 # The adapter builds that input from the Cursor input, runs the guards unchanged and translates the decision back.
 # Policy differences in Cursor (recorded in docs/HOOKS.md §6):
-#   - "ask" cannot be relied on (documented as accepted but not enforced for preToolUse). Administrative actions still
-#     return "ask" (a non-enforcing Cursor falls back to its own command approval). `terraform apply` never does: the
-#     guard runs in unattended mode so a local apply always needs the human token (scripts/approve-apply.sh).
+#   - "ask" is returned for administrative actions and, since 1.4.0, for the foundation apply too: observed live in
+#     Cursor 3.21.16 (2026-09-24), Cursor prompts the user and proceeds on approval, exactly like Claude Code.
+#     options.apply_gate: token keeps the human-made token mandatory (auto-run setups, shared machines).
 #   - A Cursor IDE session is interactive, so the attended marker defaults to 1 unless the session-start hook reported
 #     a background agent (SLIPWAY_SESSION_ATTENDED=0). The marker only affects whether admin actions ask or deny.
 #   - Cursor subagents get no agent_type in hook input; explore and verify are read-only through `readonly: true`
@@ -142,7 +142,7 @@ decide_shell() { # $1 command, $2 cwd
   [ -n "$1" ] || emit deny "could not read the shell command from the hook input (failing closed)"
   CACHE_KEY="$(cache_key "shell|$(cursor_json conversation_id)|$2|$1")"; replay_cached "$CACHE_KEY"
   run_guards "$(claude_input Bash "$(python3 -c 'import json,sys; print(json.dumps({"command":sys.argv[1]}))' "$1")" "$2")" \
-    unattended:guard-terraform-apply.sh guard-secrets-and-state.sh guard-immutable-tags.sh guard-admin-actions.sh
+    guard-terraform-apply.sh guard-secrets-and-state.sh guard-immutable-tags.sh guard-admin-actions.sh
 }
 decide_read() { # $1 file path, $2 strict (1 = deny when the path is unknown; 0 = allow, the input shape is undocumented)
   if [ -z "$1" ]; then [ "$2" = 1 ] && emit deny "could not read the file path from the hook input (failing closed)"; emit allow ""; fi

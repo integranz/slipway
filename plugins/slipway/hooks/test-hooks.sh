@@ -72,6 +72,14 @@ export CLAUDE_CODE_SESSION_ATTENDED=1
 expect "no token, attended -> ask (prompt)"       guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" "$ASK"
 expect "attended but bypassPermissions -> denied" guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation" "" bypassPermissions)"
 expect "attended but dontAsk -> denied"           guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation" "" dontAsk)"
+SLIPWAY_APPLY_GATE=token expect "attended, apply_gate=token (env) -> denied with token instructions" guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")"
+printf 'schema_version: 1\noptions:\n  apply_gate: token\n' > "$T/.slipway/config.yaml"
+expect "attended, apply_gate=token (repo config) -> denied" guard-terraform-apply.sh 2 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")"
+printf 'schema_version: 1\noptions:\n  apply_gate: prompt\n' > "$T/.slipway/config.yaml"
+expect "attended, apply_gate=prompt (repo config) -> ask"  guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" "$ASK"
+rm -f "$T/.slipway/config.yaml"
+bash "$P/scripts/approve-apply.sh" "$T/infra/foundation/tfplan.dev" >/dev/null
+SLIPWAY_APPLY_GATE=token expect "apply_gate=token with a valid token -> allow" guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" '"permissionDecision":"allow"'
 bash "$P/scripts/approve-apply.sh" "$T/infra/foundation/tfplan.dev" >/dev/null
 expect "valid token, attended -> allow, consumed" guard-terraform-apply.sh 0 "$(json_bash 'terraform apply tfplan.dev' "$T/infra/foundation")" '"permissionDecision":"allow"'
 expect "destroy still denied when attended"       guard-terraform-apply.sh 2 "$(json_bash 'terraform destroy' "$T/infra/foundation")"

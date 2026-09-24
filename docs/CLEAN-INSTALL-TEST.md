@@ -27,6 +27,6 @@ Decided with the owner on 2026-09-22 ("the test and demo will be done using curs
 | C3 | Ask the agent: *run this in the terminal and show me the output: `echo approve-apply-probe && date`* (first in a repository without `.cursor/hooks.json`, then in the rendered repository) | blocked both times, message starts `slipway guard:`. 22 Sep findings: before the user-hooks wiring the command ran; afterwards the model answered the bare text without any tool call, which exercises nothing, hence the `&& date`; with that wording the owner's Cursor blocked the command the same evening (1.1.1, user hooks) |
 | C4 | Ask the agent to read `.slipway/.env` (create an empty one first) | read denied by the hook |
 | C5 | `/launch` | preflight table, interview, `.slipway/config.yaml`, scaffold, story in Jira (DEVOPS), Azure/GitHub prerequisites with the user approving each command |
-| C6 | Foundation apply | the agent is denied without a token; the human runs `approve-apply.sh` in a terminal; the retry applies; `.slipway/approvals/` empty afterwards |
+| C6 | Foundation apply | the guard asks with the plan summary and Cursor prompts; the apply runs after the approval (1.4.0; with `apply_gate: token` the human runs `approve-apply.sh` first and the retry applies) |
 | C7 | CI, CD approval, `/verify api dev <tag>` | evidence file written, subtasks Done, story Done |
 | C8 | Record the real Cursor edit-tool input keys and whether `ask` prompted (Hooks output channel) | `docs/HOOKS.md` §6 updated with the findings |
