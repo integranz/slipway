@@ -2,6 +2,14 @@
 
 Every claim gets one command and a literal comparison. CONFIRMED needs a positive observation; absence of errors is not evidence.
 
+## Where the report goes (`options.evidence_store`)
+| Store | Record | Who writes it | Commits |
+|---|---|---|---|
+| `release` (default) | GitHub Release `<app>/v<version>`: `release-manifest.json` (CI, when it tags), `deploy-<env>-outputs.json`, `deploy-<env>-apply.txt`, `deploy-<env>-smoke.txt` (CD apply job), `verify-<app>-<env>-<tag>.md` (`/slipway:verify`) | CI, CD and the verifier with `gh release create/upload` (the CD caller needs `contents: write`) | none |
+| `repo` | `.slipway/evidence/<app>/<tag>.md` | the verifier; a human merges the pull request | one per deployment |
+| `none` | the session output and the tracker comment | — | none |
+The CD artifact `deploy-evidence-<app>-<env>-<tag>` (90 days) exists in every store; the release assets are the durable copy.
+
 ## Image (local, after `/slipway:dockerize`)
 | Claim | Command | Compare |
 |---|---|---|

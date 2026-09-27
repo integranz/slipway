@@ -48,7 +48,7 @@ Push or merge so the default branch carries the current code, then watch every a
 Follow `skills/deploy/SKILL.md` per app for the released version and `<env>`. With `cd_trigger: on-ci-success` the CD is already running: watch it instead of dispatching. Approval: with `cd_approval: in-session`, present the plan summary, ask the user with `AskUserQuestion`, and on "approve" call the pending-deployments API (the hook forces a permission prompt); with `github-ui`, print the run URL and wait for the human. Never approve without the explicit answer.
 
 ## Phase 8 — Verify and track
-Follow `skills/verify/SKILL.md` per app (`verify.cjs <app> <env> <tag>`), record the deploy subtasks (`subtask done`/`review`), commit the evidence through a pull request when the branch is protected.
+Follow `skills/verify/SKILL.md` per app (`verify.cjs <app> <env> <tag>`), record the deploy subtasks (`subtask done`/`review`). With `evidence_store: release` (default) the report is already attached to the GitHub Release; with `repo`, commit the evidence file through a pull request when the branch is protected.
 
 ## Output (always end with this)
 ```

@@ -162,6 +162,14 @@
             "token"
           ],
           "description": "prompt (default): the apply guard asks in the session; token: a human-made approval token is always required."
+        },
+        "evidence_store": {
+          "enum": [
+            "release",
+            "repo",
+            "none"
+          ],
+          "description": "Where /slipway:verify stores its report: the GitHub Release of the tag (default), a committed file under .slipway/evidence, or nowhere."
         }
       }
     },

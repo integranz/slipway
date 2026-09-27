@@ -34,3 +34,5 @@ Rendered from `templates/runner/github-actions/files/.github/workflows/_ci.yml.t
 
 ## Verifying a run (`/slipway:verify`, `explore`)
 `gh run list --workflow <prefix>-<app>-ci --branch main`, `gh run view <id>`; job summary lists the pushed tag and digest; artifact `release-manifest-<app>-<version>` is the source of truth for the deploy step (`node scripts/app-info.cjs <app>` prints the workflow names). Registry side: `az acr repository show-tags -n <acr> --repository <repo>`, `az acr manifest list-metadata -r <acr> -n <repo>` for digests.
+
+- GitHub Release per tag (`options.evidence_store: release`, default since 1.5.0): the CI release job creates `<app>/v<version>` with `gh release create --verify-tag` right after pushing the tag and attaches `release-manifest.json`; the CD apply job attaches `deploy-<env>-outputs.json`, `deploy-<env>-apply.txt` and `deploy-<env>-smoke.txt` (its caller grants `contents: write`); `/slipway:verify` attaches `verify-<app>-<env>-<tag>.md`. A missing release only warns in CD (older tags); the verifier creates it when absent.

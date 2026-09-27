@@ -107,7 +107,7 @@ for (const item of rendered) {
   if (!dry) { fs.mkdirSync(path.dirname(item.dest), { recursive: true }); fs.writeFileSync(item.dest, content); if (/\.(sh|cjs|mjs)$/.test(item.dest)) fs.chmodSync(item.dest, 0o755); }
   console.log(`  ${exists ? "replace" : "write  "} ${relDest}`); summary.written++;
 }
-if (!dry) fs.mkdirSync(path.join(repo, ".slipway", "evidence"), { recursive: true });
+if (!dry && derived.evidence_store === "repo") fs.mkdirSync(path.join(repo, ".slipway", "evidence"), { recursive: true }); // committed evidence files only with evidence_store: repo (the GitHub Release is the default hub)
 console.log(`done: ${summary.written} written, ${summary.merged} merged, ${summary.skipped} skipped`);
 
 // Files from the combined-pipeline layout (before one CI/CD per app) are never deleted by the scaffold; point at them.

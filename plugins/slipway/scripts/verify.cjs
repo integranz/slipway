@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Deterministic post-deployment verification for ONE app (cloud=azure, compute=aca, runner=github-actions).
-// usage: node verify.cjs <app> <env> <tag> [--repo <dir>] [--json] [--evidence <path>] [--no-write]
+// usage: node verify.cjs <app> <env> <tag> [--repo <dir>] [--json] [--evidence <path>] [--no-write] [--store release|repo|none]
 // Every claim is a literal comparison with the command that produced the evidence. Exit 0 = all CONFIRMED,
 // 2 = at least one REFUTED, 3 = only UNVERIFIABLE issues. Nothing here mutates anything.
 "use strict";
@@ -9,9 +9,9 @@ const { spawnSync } = require("node:child_process");
 const { loadConfig, derive } = require("./lib/config.cjs");
 const yaml = require("./lib/js-yaml.min.js");
 
-const USAGE = "usage: verify.cjs <app> <env> <tag> [--repo <dir>] [--json] [--evidence <path>] [--no-write]";
+const USAGE = "usage: verify.cjs <app> <env> <tag> [--repo <dir>] [--json] [--evidence <path>] [--no-write] [--store release|repo|none]";
 const args = process.argv.slice(2); const flag = n => args.includes(n); const val = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
-const positional = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && ["--repo", "--evidence"].includes(args[i - 1])));
+const positional = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && ["--repo", "--evidence", "--store"].includes(args[i - 1])));
 const [appName, env, tag] = positional;
 if (!appName || !env || !tag) { console.error(USAGE); process.exit(1); }
 const repo = path.resolve(val("--repo", "."));
@@ -22,6 +22,10 @@ if (!config.environments.includes(env)) { console.error(`environment '${env}' is
 if (!/^[0-9]+\.[0-9]+\.[0-9]+/.test(tag)) { console.error(`'${tag}' is not a semver tag`); process.exit(1); }
 const derived = derive(config, options, repo);
 const app = derived.apps.find(a => a.name === appName);
+// Where the report goes (options.evidence_store, overridable with --store): the GitHub Release of the tag (default),
+// a committed file under .slipway/evidence, or nowhere. --evidence <path> always writes that file in addition.
+const store = val("--store", derived.evidence_store || "release");
+if (!["release", "repo", "none"].includes(store)) { console.error("--store must be release, repo or none"); process.exit(1); }
 
 const claims = [];
 const record = (claim, verdict, evidence) => claims.push({ claim, verdict, evidence: String(evidence).replace(/\s+/g, " ").trim().slice(0, 400) });
@@ -157,8 +161,35 @@ const tf = (dir, tfArgs, timeout) => sh("terraform", [`-chdir=${dir}`, ...tfArgs
     "| # | Claim | Verdict | Evidence |", "|---|---|---|---|", ...claims.map((c, i) => `| ${i + 1} | ${c.claim} | ${c.verdict} | ${c.evidence.replace(/\|/g, "\\|")} |`), "",
     `Result: ${counts.CONFIRMED} confirmed / ${counts.REFUTED} refuted / ${counts.UNVERIFIABLE} unverifiable`,
     ...(outputs && outputs.url ? ["", `- url: ${outputs.url}`] : [])].join("\n") + "\n";
-  const evidencePath = val("--evidence", path.join(repo, app.evidence_dir, `${tag}.md`));
-  if (!flag("--no-write")) { fs.mkdirSync(path.dirname(evidencePath), { recursive: true }); fs.writeFileSync(evidencePath, md); }
-  if (flag("--json")) console.log(JSON.stringify({ app: app.name, env, tag, run_id: runId, counts, claims, evidence: evidencePath }, null, 2)); else { console.log(md); console.log(`evidence written: ${path.relative(repo, evidencePath)}`); }
+  // ---- Store the report ----
+  const explicit = val("--evidence", null); const write = !flag("--no-write");
+  const info = { store };
+  if (store === "repo" || explicit) {
+    const p = explicit || path.join(repo, app.evidence_dir, `${tag}.md`); info.file = p;
+    if (write) { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, md); }
+  }
+  if (store === "release") {
+    const tagName = `${app.tag_prefix}${tag}`;
+    const dir = path.join(os.tmpdir(), "slipway-evidence", app.name); const file = path.join(dir, `verify-${app.name}-${env}-${tag}.md`);
+    Object.assign(info, { file: info.file || file, release_tag: tagName, release_url: `https://github.com/${ghRepo}/releases/tag/${encodeURIComponent(tagName)}`, uploaded: false });
+    if (write) {
+      fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, md);
+      if (!have("gh")) info.error = "gh CLI not available";
+      else {
+        // CI creates the release when it tags (evidence_store: release); create it here only for tags released before that.
+        if (!sh("gh", ["release", "view", tagName, "-R", ghRepo, "--json", "tagName"]).ok) {
+          const cr = sh("gh", ["release", "create", tagName, "-R", ghRepo, "--verify-tag", "--title", `${app.name} ${tag}`,
+            "--notes", `slipway release of ${app.name} ${tag}. Assets: release manifest, deploy outputs and smoke test per environment, verification report.`]);
+          if (!cr.ok) info.error = `gh release create: ${(cr.err || cr.out || "").trim().split("\n")[0]}`;
+        }
+        if (!info.error) { const up = sh("gh", ["release", "upload", tagName, file, "-R", ghRepo, "--clobber"]); info.uploaded = up.ok; if (!up.ok) info.error = `gh release upload: ${(up.err || up.out || "").trim().split("\n")[0]}`; }
+      }
+    }
+  }
+  const evidenceLine = !write ? "evidence: not written (--no-write)"
+    : store === "none" && !explicit ? "evidence: not stored (evidence_store: none)"
+    : store === "release" ? (info.uploaded ? `evidence: uploaded to GitHub Release ${info.release_tag} as ${path.basename(info.file)} (${info.release_url})` : `evidence: NOT uploaded to GitHub Release ${info.release_tag} (${info.error}); report kept at ${info.file}`)
+    : `evidence written: ${path.relative(repo, info.file)}`;
+  if (flag("--json")) console.log(JSON.stringify({ app: app.name, env, tag, run_id: runId, counts, claims, evidence: info.file || null, evidence_store: info }, null, 2)); else { console.log(md); console.log(evidenceLine); }
   process.exit(counts.REFUTED ? 2 : counts.UNVERIFIABLE ? 3 : 0);
 })();
