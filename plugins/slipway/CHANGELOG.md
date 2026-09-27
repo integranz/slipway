@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/integranz/slipway/compare/v1.4.3...v1.5.0) (2026-09-27)
+
+### Features
+
+* **evidence:** evidence_store option — the GitHub Release of the tag is the evidence hub by default ([#19](https://github.com/integranz/slipway/issues/19)) ([c32ddf0](https://github.com/integranz/slipway/commit/c32ddf0ab5e7d511d9bff1d12fcb14d72dd1bb19))
+
 ## [1.4.3](https://github.com/integranz/slipway/compare/v1.4.2...v1.4.3) (2026-09-27)
 
 ### Bug Fixes
