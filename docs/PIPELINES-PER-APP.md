@@ -38,7 +38,7 @@ From that one list the scaffold renders, per app:
 - `.github/workflows/<prefix>-<app>-cd.yml` (`workflow_dispatch` + optional `workflow_run` on the app's CI),
 - `infra/apps/<app>/` root module (state key `<project>/apps/<app>/<env>.tfstate`).
 
-The per-app path list = app path + `paths` + `shared_paths` + the four workflow files + `infra/apps/<app>` (+ root `.dockerignore` when the Docker build context is the repository root). `verify` gets a claim that the rendered triggers and `pathFilters` still agree.
+The per-app path list = app path + `paths` + `shared_paths` + the four workflow files + `infra/apps/<app>` (+ root `.dockerignore` when the Docker build context is the repository root). `verify` gets a claim that the rendered triggers and `pathFilters` still agree. Every list ends with the exclusion `!**/.terraform.lock.hcl` (gate, triggers) / `:!**/.terraform.lock.hcl` (version filters): a Terraform provider lock file is worth committing but changes neither the image nor its version (2026-09-27: an evidence pull request that also carried `infra/apps/api/.terraform.lock.hcl` cut `api/v0.1.4` on taskflow).
 
 ## Workflows
 
@@ -81,6 +81,6 @@ The per-app path list = app path + `paths` + `shared_paths` + the four workflow 
 
 ## Any stack, any structure (2026-09-21, plugin 0.16.0)
 - `stack: custom`: the agent writes the Dockerfile for the app (or keeps an existing one) through a confirmed pull request; slipway renders no image template and verifies the contract (VERSION/COMMIT build args, health with version, non-root). Everything else was already language-agnostic. Curated hardened templates remain for .NET 8 and React/Vite; `node-ts-api` is planned for 1.1.
-- Apps at the repository root (`path: .`, must be the only app): triggers `**` minus `.slipway/**` and `**/*.md`, `pathFilters` `.`, `:!/.slipway`, `:!**/*.md`; root `version.json` is not legacy; the stack's ignore file shadows the common `.dockerignore` and carries the repository-level exclusions. Name the app after its role (`api` → `<repo>-api-ci`).
+- Apps at the repository root (`path: .`, must be the only app): triggers `**` minus `.slipway/**`, `**/*.md` and `**/.terraform.lock.hcl`, `pathFilters` `.`, `:!/.slipway`, `:!**/*.md`, `:!**/.terraform.lock.hcl`; root `version.json` is not legacy; the stack's ignore file shadows the common `.dockerignore` and carries the repository-level exclusions. Name the app after its role (`api` → `<repo>-api-ci`).
 - Per-app tests moved from `_ci.yml` into each caller: `apps[].test_services` render a GitHub Actions `services:` block (reusable-workflow inputs cannot carry it) and `apps[].test_env` the test variables; `ci` needs `test`, `_ci`'s `image` needs `version` only; the `<app> ci` result also fails when tests fail.
 - Registered for later: `config_store: app-configuration`, `database: azure-postgresql-flexible` (foundation layer, connection string into Key Vault), the configuration scanner and proposed code changes through confirmed pull requests.

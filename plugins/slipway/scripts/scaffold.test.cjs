@@ -107,7 +107,7 @@ test("an app without inputs outside its path builds from its own directory", () 
   assert.doesNotMatch(api, /libs\//); assert.doesNotMatch(api, /context is the repository root/); assert.ok(!exists(repo, "apps/api/Dockerfile.dockerignore") || !/^infra$/m.test(read(repo, "apps/api/Dockerfile.dockerignore")), "no root-context ignore rules when the context is the app path");
   assert.match(read(repo, "compose.yaml"), /context: apps\/api\n\s+dockerfile: Dockerfile/);
   const ci = yaml.load(read(repo, ".github/workflows/slipway-demo-api-ci.yml"));
-  assert.deepEqual(ci.on.push.paths, ["apps/api/**", ".github/workflows/slipway-demo-api-ci.yml", ".github/workflows/slipway-demo-api-cd.yml", ".github/workflows/_ci.yml", ".github/workflows/_cd.yml", "infra/apps/api/**"]);
+  assert.deepEqual(ci.on.push.paths, ["apps/api/**", ".github/workflows/slipway-demo-api-ci.yml", ".github/workflows/slipway-demo-api-cd.yml", ".github/workflows/_ci.yml", ".github/workflows/_cd.yml", "infra/apps/api/**", "!**/.terraform.lock.hcl"]);
   assert.equal(ci.jobs.ci.with.context, "apps/api");
 });
 
@@ -271,10 +271,10 @@ test("per-app CI workflows: thin callers with path filters, gate job, shared _ci
     assert.equal(web.jobs.ci.uses, "./.github/workflows/_ci.yml"); assert.equal(web.jobs.ci.secrets, "inherit"); assert.equal(web.jobs.ci.if, "needs.changes.outputs.run == 'true'"); assert.deepEqual(web.jobs.ci.needs, ["changes", "test"]);
     assert.deepEqual(web.jobs.ci.with, { app: "web", app_path: "apps/web", context: "apps/web", dockerfile: "apps/web/Dockerfile", image_repository: "adlc-demo/web", is_dotnet: false, is_node: true, tag_prefix: "web/v" });
     assert.equal(web.on.pull_request.paths, undefined, "gate mode: pull requests are not path-filtered");
-    assert.deepEqual(web.on.push.paths, ["apps/web/**", ".github/workflows/slipway-demo-web-ci.yml", ".github/workflows/slipway-demo-web-cd.yml", ".github/workflows/_ci.yml", ".github/workflows/_cd.yml", "infra/apps/web/**"]);
+    assert.deepEqual(web.on.push.paths, ["apps/web/**", ".github/workflows/slipway-demo-web-ci.yml", ".github/workflows/slipway-demo-web-cd.yml", ".github/workflows/_ci.yml", ".github/workflows/_cd.yml", "infra/apps/web/**", "!**/.terraform.lock.hcl"]);
     const gatePaths = web.jobs.changes.steps[0].env.APP_PATHS.trim().split("\n").map(s => s.trim());
     assert.deepEqual(gatePaths, web.on.push.paths.map(p => p.replace(/\/\*\*$/, "")), "gate paths must equal the push trigger paths");
-    if (versioning === "nbgv") assert.deepEqual(gatePaths, JSON.parse(read(repo, "apps/web/version.json")).pathFilters.map(p => p.replace(/^\//, "")), "gate paths must equal version.json pathFilters");
+    if (versioning === "nbgv") assert.deepEqual(gatePaths, JSON.parse(read(repo, "apps/web/version.json")).pathFilters.map(p => p.startsWith(":!") ? "!" + p.slice(2) : p.replace(/^\//, "")), "gate paths must equal version.json pathFilters");
     else assert.ok(!exists(repo, "apps/web/version.json"), "semantic-release renders no version.json");
     if (versioning === "nbgv") {
       const api = yaml.load(read(repo, ".github/workflows/slipway-demo-api-ci.yml"));
@@ -282,7 +282,7 @@ test("per-app CI workflows: thin callers with path filters, gate job, shared _ci
       assert.ok(api.on.push.paths.includes("libs/dotnet/Demo.Contracts/**")); assert.ok(api.on.push.paths.includes(".dockerignore"));
       const v = JSON.parse(read(repo, "apps/api/version.json"));
       assert.equal(v.version, "0.2"); assert.equal(v.release.tagName, "api/v{version}"); assert.deepEqual(v.publicReleaseRefSpec, ["^refs/heads/main$"]);
-      assert.deepEqual(v.pathFilters, api.on.push.paths.map(p => "/" + p.replace(/\/\*\*$/, "")), "version.json pathFilters must equal the CI trigger paths");
+      assert.deepEqual(v.pathFilters, api.on.push.paths.map(p => p.startsWith("!") ? ":!" + p.slice(1) : "/" + p.replace(/\/\*\*$/, "")), "version.json pathFilters must equal the CI trigger paths");
     }
     if (spawnSync("actionlint", ["--version"]).status === 0) { const al = spawnSync("actionlint", fs.readdirSync(path.join(repo, ".github/workflows")).map(f => path.join(repo, ".github/workflows", f)), { encoding: "utf8" }); assert.equal(al.status, 0, al.stdout + al.stderr); }
   }
@@ -363,9 +363,9 @@ test("stack custom at the repository root: own Dockerfile kept, root filters, se
   const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.doesNotMatch(r.stdout, /legacy/, "a root app owns version.json: not legacy");
   assert.equal(read(repo, "Dockerfile"), "FROM dhi.io/node:22\n", "the user's Dockerfile is never touched");
-  assert.deepEqual(JSON.parse(read(repo, "version.json")).pathFilters, [".", ":!/.slipway", ":!**/*.md"]);
+  assert.deepEqual(JSON.parse(read(repo, "version.json")).pathFilters, [".", ":!/.slipway", ":!**/*.md", ":!**/.terraform.lock.hcl"]);
   const ci = yaml.load(read(repo, ".github/workflows/taskflow-api-ci.yml"));
-  assert.equal(ci.name, "taskflow-api-ci"); assert.deepEqual(ci.on.push.paths, ["**", "!.slipway/**", "!**/*.md"]);
+  assert.equal(ci.name, "taskflow-api-ci"); assert.deepEqual(ci.on.push.paths, ["**", "!.slipway/**", "!**/*.md", "!**/.terraform.lock.hcl"]);
   assert.deepEqual(Object.keys(ci.jobs), ["changes", "test", "ci", "result"]);
   assert.equal(ci.jobs.test.services.postgres.image, "postgres:16-alpine"); assert.deepEqual(ci.jobs.test.services.postgres.ports, ["5432:5432"]); assert.match(ci.jobs.test.services.postgres.options, /pg_isready -U taskflow/);
   assert.equal(ci.jobs.test.env.DATABASE_URL, "postgres://taskflow:taskflow@localhost:5432/taskflow_test"); assert.ok(ci.jobs.test.steps.some(s => s.uses === "actions/setup-node@v7"), "package.json at the root makes a custom app a node app for setup");
@@ -386,7 +386,7 @@ test("dotnet app at the repository root: the stack ignore file shadows the commo
   assert.match(r.stdout, /shadow\s+\.dockerignore/);
   const di = read(repo, ".dockerignore"); assert.match(di, /stack dotnet8-api/); assert.match(di, /^\.git$/m); assert.match(di, /^infra$/m); assert.match(di, /^tests\/$/m);
   const df = read(repo, "Dockerfile"); assert.match(df, /COPY src\/Api\/\*\.csproj src\/Api\//); assert.match(df, /-f Dockerfile \./);
-  assert.deepEqual(JSON.parse(read(repo, "version.json")).pathFilters, [".", ":!/.slipway", ":!**/*.md"]);
+  assert.deepEqual(JSON.parse(read(repo, "version.json")).pathFilters, [".", ":!/.slipway", ":!**/*.md", ":!**/.terraform.lock.hcl"]);
 });
 
 test("a root app must be the only app", () => {

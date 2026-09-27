@@ -181,12 +181,20 @@ function derive(config, options, repoRoot) {
     const workflowBase = `${namePrefix}-${a.name}`, workflowCi = `${workflowBase}-ci`, workflowCd = `${workflowBase}-cd`;
     const infraDir = `infra/apps/${a.name}`;
     // An app at the repository root owns everything except records that never change its image (evidence, docs).
-    const ROOT_EXCLUDES = [".slipway", "**/*.md"];
+    // Terraform provider lock files (.terraform.lock.hcl) are created by whoever runs `terraform init` first (plan skill,
+    // verify drift check, CI) and are worth committing, but a lock file alone changes neither the image nor its version:
+    // excluded from the gate, the triggers and the version filters so that committing one never releases a new version
+    // (seen 2026-09-27: an evidence pull request carrying infra/apps/api/.terraform.lock.hcl cut api/v0.1.4).
+    const LOCK_FILES = "**/.terraform.lock.hcl";
+    const ROOT_EXCLUDES = [".slipway", "**/*.md", LOCK_FILES];
     const pipelinePaths = atRoot ? ["**", ...ROOT_EXCLUDES.map(e => `!${e}`)] : uniq([appPath, ...extraPaths, ...sharedPaths,
       `.github/workflows/${workflowCi}.yml`, `.github/workflows/${workflowCd}.yml`, `.github/workflows/_ci.yml`, `.github/workflows/_cd.yml`,
-      infraDir, ...(contextRoot ? [".dockerignore"] : [])]);
-    const triggerPaths = atRoot ? ["**", "!.slipway/**", "!**/*.md"] : pipelinePaths.map(p => isFilePath(repoRoot, p) ? p : `${p}/**`);
-    const pathFilters = atRoot ? [".", ":!/.slipway", ":!**/*.md"] : pipelinePaths.map(p => `/${p}`);
+      infraDir, ...(contextRoot ? [".dockerignore"] : []), `!${LOCK_FILES}`]);
+    const isNeg = (p) => p.startsWith("!");
+    const triggerPaths = atRoot ? ["**", "!.slipway/**", "!**/*.md", `!${LOCK_FILES}`]
+      : pipelinePaths.map(p => isNeg(p) ? p : (isFilePath(repoRoot, p) ? p : `${p}/**`));
+    const pathFilters = atRoot ? [".", ":!/.slipway", ":!**/*.md", `:!${LOCK_FILES}`]
+      : pipelinePaths.map(p => isNeg(p) ? `:!${p.slice(1)}` : `/${p}`);
     return { ...a, path: appPath, image: `${registryHost}/${a.image_repository}`, image_local: `${config.project.name}/${a.name}`, local_port: 8080 + i,
       is_node: a.stack === "react-vite" || a.stack === "node-ts-api" || (a.stack === "custom" && hasFile(`${appDir}package.json`)),
       is_dotnet: a.stack.startsWith("dotnet") || (a.stack === "custom" && hasCsproj()), is_custom: a.stack === "custom", at_root: atRoot,
