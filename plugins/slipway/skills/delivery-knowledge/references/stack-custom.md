@@ -18,7 +18,7 @@ Not the end user. When the app has no Dockerfile, the dockerize phase drafts one
 - `apps[].test_services` start service containers (for example PostgreSQL) next to the tests; `apps[].test_env` sets the test step's variables. Both render into the app's own CI workflow, not the shared one.
 
 ## Apps at the repository root (`path: .`)
-- Must be the only app. Triggers are `**` minus `.slipway/**` and `**/*.md`; `pathFilters` are `.`, `:!/.slipway`, `:!**/*.md` (evidence and docs never bump the version). `version.json`, the Dockerfile and `.dockerignore` sit at the root; the stack's ignore file shadows the common one and carries the repository-level exclusions.
+- Must be the only app. Triggers are `**` minus `.slipway/**`, `**/*.md` and `**/.terraform.lock.hcl`; `pathFilters` are `.`, `:!/.slipway`, `:!**/*.md`, `:!**/.terraform.lock.hcl` (evidence and docs never bump the version). `version.json`, the Dockerfile and `.dockerignore` sit at the root; the stack's ignore file shadows the common one and carries the repository-level exclusions.
 - Name the app after its role (`api`), giving `<repo>-api-ci` / `<repo>-api-cd`.
 
 ## Planned (1.1)
