@@ -415,3 +415,19 @@ test("a root app must be the only app", () => {
 test("validate-config reports OK for the example", () => {
   const v = validate(EXAMPLE); assert.equal(v.status, 0, v.stderr); assert.match(v.stdout, /valid \(2 app\(s\)/);
 });
+
+test("cursor cloud environment: environment.json runs the committed install script, pinned to the rendering plugin version", () => {
+  const repo = mkRepo();
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr + r.stdout);
+  const env = JSON.parse(read(repo, ".cursor/environment.json"));
+  assert.equal(env.install, "bash .slipway/cursor-install.sh"); assert.match(env.start, /service docker start/);
+  const sh = read(repo, ".slipway/cursor-install.sh");
+  assert.doesNotMatch(sh, /<%/, "unrendered placeholder left in cursor-install.sh");
+  const version = require("./lib/config.cjs").pluginVersion();
+  assert.ok(sh.includes(`PLUGIN_VERSION="${version}"`), `install script must pin ${version}: ${sh.match(/PLUGIN_VERSION=.*/)}`);
+  assert.match(sh, /PLUGIN_REPO="https:\/\/github\.com\/[^"]+\/slipway"/);
+  assert.match(sh, /plugins\/local\}\/slipway/, "must install where .slipway/cursor-hooks.sh looks"); assert.match(sh, /\/unattended"/, "must leave the unattended marker");
+  assert.ok(fs.statSync(path.join(repo, ".slipway/cursor-install.sh")).mode & 0o111, "install script must be executable");
+  const syntax = spawnSync("bash", ["-n", path.join(repo, ".slipway/cursor-install.sh")], { encoding: "utf8" }); assert.equal(syntax.status, 0, syntax.stderr);
+  const agents = read(repo, "AGENTS.md"); assert.match(agents, /## Cursor Cloud/); assert.ok(agents.includes(`installs the slipway plugin ${version} into`), "AGENTS.md Cursor Cloud section must name the plugin version");
+});

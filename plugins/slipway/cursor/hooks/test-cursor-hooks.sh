@@ -8,6 +8,7 @@ git -C "$T" init -q -b main; mkdir -p "$T/infra/foundation" "$T/infra/apps/api" 
 printf 'plan' > "$T/infra/foundation/tfplan.dev"; printf 'plan' > "$T/infra/apps/api/tfplan.dev"
 printf '.slipway/approvals/\n*.tfvars\n!*.tfvars.example\ntfplan*\n.env\n' > "$T/.gitignore"; git -C "$T" add .gitignore; git -C "$T" -c user.email=t@t -c user.name=t commit -qm init
 unset SLIPWAY_SESSION_ATTENDED CLAUDE_CODE_SESSION_ATTENDED
+export SLIPWAY_UNATTENDED_MARKER="$T/no-marker"   # the cloud install marker of the machine running the tests must not leak in
 export SLIPWAY_CURSOR_CACHE="$T/cache"; export SLIPWAY_CURSOR_CACHE_TTL=3
 export SLIPWAY_APPROVAL_REPLAY_SECONDS=0   # guard-level replay is tested in test-hooks.sh
 clear_cache() { rm -rf "$T/cache"; }
@@ -146,6 +147,14 @@ assert ("bash \"%s/cursor-hooks.sh\" pretooluse" % sys.argv[2]) in json.dumps(c)
   CURSOR_PLUGINS_LOCAL="$T/local" CURSOR_USER_HOOKS="$T/user-hooks.json" CURSOR_USER_SHIM_DIR="$T/shim" bash "$INST" --uninstall >/dev/null 2>&1
   if [ ! -d "$T/local/slipway" ] && [ ! -d "$T/shim" ] && ! grep -q 'cursor-hooks.sh' "$T/user-hooks.json" && grep -q other-hook "$T/user-hooks.json"; then pass=$((pass+1)); echo "  ok   --uninstall removes the folder, the shim and only our entries"; else fail=$((fail+1)); echo "  FAIL uninstall"; fi
 fi
+
+echo "cloud environment marker (Cursor Cloud Agents run no session-start hook; .slipway/cursor-install.sh leaves ~/.cursor/slipway/unattended)"
+mkdir -p "$T/cloud"; printf 'cursor cloud agent environment\n' > "$T/cloud/unattended"; clear_cache
+expect "admin write, marker present, env unset -> deny"   shell.sh deny "$(shell_in 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")" SLIPWAY_UNATTENDED_MARKER="$T/cloud/unattended"
+expect "apply without token, marker present -> deny"      shell.sh deny "$(shell_in 'terraform apply tfplan.dev' "$T/infra/foundation")" SLIPWAY_UNATTENDED_MARKER="$T/cloud/unattended"
+expect "admin write, marker absent, env unset -> ask"     shell.sh ask  "$(shell_in 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")" SLIPWAY_UNATTENDED_MARKER="$T/cloud/none"
+expect "explicit attended=1 wins over the marker"         shell.sh ask  "$(shell_in 'gh api -X PUT repos/o/r/environments/dev --input -' "$T")" SLIPWAY_UNATTENDED_MARKER="$T/cloud/unattended" SLIPWAY_SESSION_ATTENDED=1
+expect "probe blocked with the marker too"                pretooluse.sh deny "$(pre_in Shell '{"command":"echo approve-apply-probe && date","cwd":"","timeout":30}' "$T")" SLIPWAY_UNATTENDED_MARKER="$T/cloud/unattended"
 
 echo "session-start.sh"
 out="$(printf '{"session_id":"s1","is_background_agent":false,"composer_mode":"agent"}' | bash "$H/session-start.sh")"
