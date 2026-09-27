@@ -34,6 +34,9 @@ azure.acr_resource_group: rg-shared-dev
 ```
 Omit what detections cover (apps, ports, health paths, default branch) and what has a default (`options.*` other than the ones you want to change). No ids, no secrets: the file ends up in the workflow summary and the agent transcript.
 
+## Choosing the target of the first real run
+Pick a repository that slipway does **not** deliver yet: on a delivered one (`slipway-demo`, `taskflow`) the bootstrap finds `.slipway/config.yaml`, changes nothing and no onboarding PR appears. A small public test repository with one deployable app (a minimal .NET 8 API or an Express app with a Dockerfile, a `/health` route and a `PORT` variable) plus an answers file with the Azure and Jira identifiers is the right first target; it can be deleted afterwards.
+
 ## Steps
 1. Once: create the Cursor API key (team admin → service account, or your own key) and store it: `gh secret set CURSOR_API_KEY -R integranz/slipway` in **your** terminal (the plugin guards deny secret writes from agent sessions).
 2. Dispatch: `gh workflow run onboard.yml -R integranz/slipway -f repository=integranz/<name> -f answers="$(cat answers.txt)"`. Add `-f dry_run=true` to see the request without starting an agent.
@@ -42,6 +45,7 @@ Omit what detections cover (apps, ports, health paths, default branch) and what 
 5. On a desktop, in the merged repository: `/slipway:launch` (resumable) completes the Azure prerequisites, GitHub secrets, environment and ruleset, the foundation apply, and the first CI/CD with your approval.
 
 ## First-run checks (record here)
+- **Done 2026-09-27, dry run** (owner, https://github.com/integranz/slipway/actions/runs/36347722889, inputs `repository=integranz/slipway-demo`, `ref=main`, no answers, `dry_run=true`): the prompt was built from the checkout version (1.7.0, 2641 bytes), the request was `{"repos":[{"url":"https://github.com/integranz/slipway-demo","startingRef":"main"}],"autoCreatePR":true}` plus the prompt, the API step was skipped as designed. The pipeline up to the API call works; nothing was started.
 - (pending) The agent installs the plugin from the tag and `node "${CLAUDE_PLUGIN_ROOT}/scripts/options.cjs" --json` works.
 - (pending) `launch --yes --until bootstrap` writes `.slipway/config.yaml` from detections plus the answers, or stops with the list of missing values.
 - (pending) Cursor pushes the agent's commit and opens the pull request without the agent pushing (`workOnCurrentBranch: false`, `autoCreatePR: true`). If the PR does not appear, the fallback is `envVars` with a one-hour installation token for `gh pr create`.
