@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/integranz/slipway/compare/v1.5.0...v1.6.0) (2026-09-27)
+
+### Features
+
+* **cursor:** Cloud Agent environment for delivered repositories ([#20](https://github.com/integranz/slipway/issues/20)) ([0f4cb27](https://github.com/integranz/slipway/commit/0f4cb273e0820f91a7f05a170e32b87623ab72f5))
+
 ## [1.5.0](https://github.com/integranz/slipway/compare/v1.4.3...v1.5.0) (2026-09-27)
 
 ### Features
