@@ -38,6 +38,7 @@ test("onboard.yml: dispatch inputs, no input interpolation inside run blocks, AP
   assert.equal((runs.match(/\$\{\{\s*inputs\./g) || []).length, 0, "inputs must reach the shell through env, never by interpolation");
   assert.match(runs, /scripts\/onboard-prompt\.sh/); assert.match(runs, /https:\/\/api\.cursor\.com\/v1\/agents/);
   assert.match(runs, /autoCreatePR: true/); assert.match(runs, /startingRef: \$ref/);
+  assert.ok((runs.match(/https:\/\/api\.cursor\.com\/v1\/models/g) || []).length >= 2, "dry run and the invalid_model path must list the usable models");
   const start = steps.find((s) => s.name === "Start the cloud agent"); assert.ok(start.env.CURSOR_API_KEY.includes("secrets.CURSOR_API_KEY"));
   assert.match(start.if, /!inputs\.dry_run/);
 });
