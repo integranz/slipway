@@ -16,7 +16,7 @@ Arguments: `$ARGUMENTS` may contain `--cloud`, `--compute`, `--registry`, `--run
 3. Decide the mode:
    - **New**: no `.slipway/config.yaml` → full interview.
    - **Update**: `.slipway/config.yaml` exists → validate it, show the current options table, ask only what the user wants to change (or nothing if `--yes`), then re-scaffold. Never re-ask questions whose answers are already in the file.
-   - **Non-interactive** (`--yes`, or a session with no prompt UI such as a Routine or cloud run): use the existing config, or detections plus the *defaults defined below*; if any value without a default is missing, print the list of missing values and **stop before Step 3 with nothing written**. `templates/common/slipway/config.example.yaml` is a **shape reference only**; its values (names, owner, site, keys) are never defaults.
+   - **Non-interactive** (`--yes`, or a session with no prompt UI such as a Routine or cloud run): use the existing config, or detections plus the *defaults defined below*; if any value without a default is missing, print the list of missing values and **stop before Step 3 with nothing written**. Values supplied in the invocation text (the prompt of an unattended run, or `$ARGUMENTS`) count as given answers, so an unattended run can carry the identifiers that have no default (`azure.*`, `jira.*`, `options.*`) without an interview. `templates/common/slipway/config.example.yaml` is a **shape reference only**; its values (names, owner, site, keys) are never defaults.
 
 ### What has a default and what does not
 | Value | Default | Source |

@@ -97,6 +97,9 @@ The phases run in order and the command resumes from whatever exists, so you can
 - A new piece of work gets a new story: `/slipway:ticket story create --title "…" [--epic KEY]`; every skill then keeps one subtask per unit of work current, and the story closes itself when the last subtask is done.
 - Verify after every deployment: `/slipway:verify <app> <env> <tag>`. The report lands on the GitHub Release of the tag next to the release manifest and the deploy outputs; with `evidence_store: repo` you commit it through a pull request instead.
 
+### 4. Onboard a repository from a Cursor Cloud Agent (no human in the session)
+`gh workflow run onboard.yml -R integranz/slipway -f repository=<owner/name> -f answers="$(cat answers.txt)"` starts one Cursor Cloud Agent on that repository. The agent installs the plugin at a pinned version, runs `/slipway:launch --yes --until bootstrap` with the answers as the interview, drafts a Dockerfile where a custom stack needs one, and commits on a branch; Cursor opens the pull request. The agent holds no credential, so the Azure prerequisites, GitHub secrets, environment and foundation apply stay with `/slipway:launch` on a desktop after the merge. Runbook: `docs/CURSOR-ONBOARDING.md`; prompt: `scripts/onboard-prompt.sh`.
+
 ## Commands
 | Command | Purpose | Example |
 |---|---|---|
