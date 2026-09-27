@@ -24,7 +24,9 @@
 #     Cursor 3.21.16 (2026-09-24), Cursor prompts the user and proceeds on approval, exactly like Claude Code.
 #     options.apply_gate: token keeps the human-made token mandatory (auto-run setups, shared machines).
 #   - A Cursor IDE session is interactive, so the attended marker defaults to 1 unless the session-start hook reported
-#     a background agent (SLIPWAY_SESSION_ATTENDED=0). The marker only affects whether admin actions ask or deny.
+#     a background agent (SLIPWAY_SESSION_ATTENDED=0) or the Cursor Cloud Agent install step left the file
+#     ~/.cursor/slipway/unattended (cloud agents never run sessionStart: cursor.com/docs/agent/hooks, "Hooks not
+#     available in cloud agents", read 2026-09-27). The marker only affects whether admin actions ask or deny.
 #   - Cursor subagents get no agent_type in hook input; explore and verify are read-only through `readonly: true`
 #     in cursor/agents/*.md instead of guard-readonly-agents.sh.
 set -u
@@ -34,7 +36,10 @@ PLUGIN_ROOT="$(cd "$ADAPTER_DIR/../.." && pwd -P)"
 GUARDS="${SLIPWAY_GUARDS_DIR:-$PLUGIN_ROOT/hooks}"
 export CLAUDE_PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}"
 export SLIPWAY_HOST=cursor
-[ -n "${SLIPWAY_SESSION_ATTENDED:-}" ] || export SLIPWAY_SESSION_ATTENDED=1
+UNATTENDED_MARKER="${SLIPWAY_UNATTENDED_MARKER:-${HOME:-/nonexistent}/.cursor/slipway/unattended}" # written by .slipway/cursor-install.sh (cloud VM)
+if [ -z "${SLIPWAY_SESSION_ATTENDED:-}" ]; then
+  if [ -f "$UNATTENDED_MARKER" ]; then export SLIPWAY_SESSION_ATTENDED=0; else export SLIPWAY_SESSION_ATTENDED=1; fi
+fi
 ASK_PERMISSION="${ASK_PERMISSION:-ask}" # read.sh sets deny: beforeReadFile has no "ask"
 CACHE_DIR="${SLIPWAY_CURSOR_CACHE:-${TMPDIR:-/tmp}/slipway-cursor-hooks}"
 CACHE_TTL="${SLIPWAY_CURSOR_CACHE_TTL:-3}" # seconds: long enough for two hooks of one tool call, too short for a retry
