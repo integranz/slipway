@@ -1,3 +1,9 @@
+## [1.7.0](https://github.com/integranz/slipway/compare/v1.6.0...v1.7.0) (2026-09-27)
+
+### Features
+
+* **onboarding:** cloud onboarding dispatch — one Cursor Cloud Agent run opens the onboarding PR ([#21](https://github.com/integranz/slipway/issues/21)) ([7fe430e](https://github.com/integranz/slipway/commit/7fe430e82bb5a20d73734b8cb6e3da8985b6721c))
+
 ## [1.6.0](https://github.com/integranz/slipway/compare/v1.5.0...v1.6.0) (2026-09-27)
 
 ### Features
