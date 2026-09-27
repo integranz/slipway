@@ -7,18 +7,18 @@ allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Age
 
 # /slipway:dockerize — image for one app
 
-Arguments: `$0` = app path or app name from `.slipway/config.yaml` (e.g. `apps/api` or `api`). Flags: `--no-run` (build only), `--compose` (after the single-app check, run every app with `compose.yaml` and test the frontend → API proxy), `--force` (re-render the Dockerfile even if it was edited).
+Arguments: `$0` = app path or app name from `.slipway/config.yaml` (e.g. `apps/api` or `api`). Flags: `--no-run` (build only), `--compose` (after the single-app check, run every app with `compose.yaml` and test the frontend → API proxy), `--force` (re-render the Dockerfile even if it was edited), `--yes` (unattended: write a drafted `stack: custom` Dockerfile without asking, and when no Docker daemon is reachable render only and mark the build/run/health claims UNVERIFIABLE instead of stopping).
 
 ## Preconditions
 1. `.slipway/config.yaml` exists and validates: `node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" .slipway/config.yaml`. Otherwise stop and point to `/slipway:bootstrap`.
 2. Resolve the app: match `$0` against `apps[*].path` or `apps[*].name`. Unknown → list the apps and stop.
-3. Docker daemon reachable (`docker version`) and, for `base_image: dhi`, the user is logged in to `dhi.io` (a failed pull with `unauthorized` means `docker login dhi.io`; never store credentials yourself).
+3. Docker daemon reachable (`docker version`; with `--yes` and no daemon: continue with Step 1 only and report the image claims as UNVERIFIABLE) and, for `base_image: dhi`, the user is logged in to `dhi.io` (a failed pull with `unauthorized` means `docker login dhi.io`; never store credentials yourself).
 
 ## Step 0 — Tracking
 Unless `--no-ticket` or `options.tracker: none`: `/slipway:ticket subtask start "Dockerize <app>"`. Unavailable tracker → it queues; continue.
 
 ## Step 1 — Render the Dockerfile from the stack template (or check yours: stack `custom`)
-For `stack: custom` nothing is rendered for the image: the Dockerfile at `<app path>/Dockerfile` is yours. If it is missing, propose one (execute sub-agent; hardened base image when `base_image: dhi`, `ARG VERSION`/`ARG COMMIT`, non-root runtime, environment-only configuration) and ask with `AskUserQuestion` before writing it; the contract is in `delivery-knowledge/references/stack-custom.md`. For other stacks:
+For `stack: custom` nothing is rendered for the image: the Dockerfile at `<app path>/Dockerfile` is yours. If it is missing, propose one (execute sub-agent; hardened base image when `base_image: dhi`, `ARG VERSION`/`ARG COMMIT`, non-root runtime, environment-only configuration) and ask with `AskUserQuestion` before writing it (with `--yes`: write it without asking; it lands in a pull request and the build checks the contract); the contract is in `delivery-knowledge/references/stack-custom.md`. For other stacks:
 `node "${CLAUDE_PLUGIN_ROOT}/scripts/scaffold.cjs" --repo . --app <name>` (add `--force` only if asked). This writes `<app path>/Dockerfile`, `.dockerignore` (and `Dockerfile.dockerignore` for .NET apps), for frontends `nginx.conf` + `nginx.local.conf`, plus the app's own workflows, `infra/apps/<app>` module and `version.json` when they are missing. Read the build context with `node "${CLAUDE_PLUGIN_ROOT}/scripts/app-info.cjs" <name>`: it is the app path, or the repository root when the app builds inputs outside its path (declared `paths` or detected .NET `ProjectReference`s). If the scaffold reports a config error (for example no `.csproj` detected), stop and tell the user which `build.*` key to set in `.slipway/config.yaml`. Never hand-edit the Dockerfile: fix the template or the config.
 
 ## Step 2 — Build (execute sub-agent)

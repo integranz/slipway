@@ -1,0 +1,95 @@
+# Human-triggered onboarding of a repository through a Cursor Cloud Agent (runbook: docs/CURSOR-ONBOARDING.md).
+# Starts ONE cloud agent on the target repository with the prompt of scripts/onboard-prompt.sh; the agent installs the
+# plugin, runs `/slipway:launch --yes --until bootstrap` and commits on a branch; Cursor opens the pull request.
+# The agent receives no credential. This workflow needs the repository secret CURSOR_API_KEY (a Cursor team
+# service-account key or a personal API key, cursor.com/dashboard -> API Keys); it is used only to call the API.
+name: onboard
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Repository to onboard (owner/name)
+        required: true
+        type: string
+      ref:
+        description: Branch the agent starts from (its default branch)
+        required: false
+        default: main
+        type: string
+      answers:
+        description: "Interview answers the agent may not guess, one `key: value` per line (azure.*, jira.*, options.*)"
+        required: false
+        default: ""
+        type: string
+      plugin_version:
+        description: slipway version the agent installs (empty = the version of this checkout)
+        required: false
+        default: ""
+        type: string
+      model:
+        description: Cursor model id for the agent (empty = Cursor's default)
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: Print the request instead of calling the Cloud Agents API
+        required: false
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: onboard-${{ inputs.repository }}
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the prompt
+        id: prompt
+        env:
+          REPOSITORY: ${{ inputs.repository }}
+          REF: ${{ inputs.ref }}
+          ANSWERS: ${{ inputs.answers }}
+          PLUGIN_VERSION: ${{ inputs.plugin_version }}
+        run: |
+          set -euo pipefail
+          version="$PLUGIN_VERSION"
+          [ -n "$version" ] || version="$(python3 -c 'import json; print(json.load(open("plugins/slipway/.claude-plugin/plugin.json"))["version"])')"
+          args=(); if [ -n "$ANSWERS" ]; then printf '%s\n' "$ANSWERS" > answers.txt; args=(--answers answers.txt); fi
+          bash scripts/onboard-prompt.sh "$REPOSITORY" --ref "$REF" --version "$version" "${args[@]}" > prompt.txt
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          { echo "## onboard $REPOSITORY"; echo; echo "- plugin version: $version"; echo "- start ref: $REF"; echo; echo "<details><summary>Prompt</summary>"; echo; echo '```'; cat prompt.txt; echo '```'; echo "</details>"; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Build the request
+        env:
+          REPOSITORY: ${{ inputs.repository }}
+          REF: ${{ inputs.ref }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          set -euo pipefail
+          jq -n --rawfile text prompt.txt --arg url "https://github.com/$REPOSITORY" --arg ref "$REF" --arg model "$MODEL" \
+            '{prompt: {text: $text}, repos: [{url: $url, startingRef: $ref}], autoCreatePR: true}
+             + (if $model == "" then {} else {model: {id: $model}} end)' > request.json
+          echo "request: $(jq -c 'del(.prompt)' request.json) + prompt ($(wc -c < prompt.txt) bytes)"
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "dry run: the request below was NOT sent"; jq '.prompt.text |= "<prompt, see the step summary>"' request.json
+      - name: Start the cloud agent
+        if: ${{ !inputs.dry_run }}
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          REPOSITORY: ${{ inputs.repository }}
+        run: |
+          set -euo pipefail
+          [ -n "$CURSOR_API_KEY" ] || { echo "::error::repository secret CURSOR_API_KEY is not set (Cursor team service-account key or personal API key)"; exit 1; }
+          code="$(curl -sS -o response.json -w '%{http_code}' -X POST https://api.cursor.com/v1/agents \
+            -u "$CURSOR_API_KEY:" -H 'Content-Type: application/json' --data @request.json)"
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Cloud Agents API answered HTTP $code"; jq . response.json 2>/dev/null || cat response.json; exit 1
+          fi
+          id="$(jq -r '.agent.id // .id // empty' response.json)"; url="$(jq -r '.agent.url // .url // empty' response.json)"
+          [ -n "$url" ] || url="https://cursor.com/agents/$id"
+          echo "agent $id started: $url"
+          { echo; echo "- agent: [$id]($url)"; echo "- the agent commits on \`slipway/onboard\`; Cursor pushes its branch and opens the pull request on $REPOSITORY"; } >> "$GITHUB_STEP_SUMMARY"
