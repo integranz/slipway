@@ -30,7 +30,7 @@ concurrency:
 
 permissions:
   id-token: write
-  contents: read
+  contents: <%#eq options.evidence_store "release"%>write  # attach deploy outputs and smoke test to the GitHub Release of the tag<%else%>read<%/eq%>
   actions: read   # read the release manifest artifact of the CI run
 
 jobs:
@@ -72,5 +72,6 @@ jobs:
       tag: ${{ needs.resolve.outputs.tag }}
       environment: ${{ needs.resolve.outputs.environment }}
       infra_dir: <% app.infra_dir %>
+      tag_prefix: <% app.tag_prefix %>
       image_repository: <% app.image_repository %>
     secrets: inherit

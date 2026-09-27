@@ -204,7 +204,15 @@ jobs:
             nbgv tag -p "${{ inputs.app_path }}"   # tag name comes from release.tagName in the app's version.json
             git push origin "$TAG"
           fi
-<%/eq%><%#eq options.versioning "semantic-release"%>      - uses: actions/setup-node@v7
+<%#eq options.evidence_store "release"%>      - name: GitHub Release ${{ inputs.tag_prefix }}${{ needs.version.outputs.version }} (evidence hub)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag_prefix }}${{ needs.version.outputs.version }}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "${{ inputs.app }} ${{ needs.version.outputs.version }}" \
+            --notes "slipway release of ${{ inputs.app }} ${{ needs.version.outputs.version }} (commit ${{ github.sha }}). Assets: release manifest, deploy outputs and smoke test per environment, verification report."
+          gh release upload "$TAG" release-manifest.json --clobber
+<%/eq%><%/eq%><%#eq options.versioning "semantic-release"%>      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Publish the release (tag, notes, changelog)

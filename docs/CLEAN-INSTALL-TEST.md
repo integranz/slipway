@@ -28,5 +28,5 @@ Decided with the owner on 2026-09-22 ("the test and demo will be done using curs
 | C4 | Ask the agent to read `.slipway/.env` (create an empty one first) | read denied by the hook |
 | C5 | `/launch` | preflight table, interview, `.slipway/config.yaml`, scaffold, story in Jira (DEVOPS), Azure/GitHub prerequisites with the user approving each command |
 | C6 | Foundation apply | the guard asks with the plan summary and Cursor prompts; the apply runs after the approval (1.4.0; with `apply_gate: token` the human runs `approve-apply.sh` first and the retry applies) |
-| C7 | CI, CD approval, `/verify api dev <tag>` | evidence file written, subtasks Done, story Done |
+| C7 | CI, CD approval, `/verify api dev <tag>` | verification report attached to the GitHub Release `api/v<tag>` (default `evidence_store: release`), subtasks Done, story Done |
 | C8 | Record the real Cursor edit-tool input keys and whether `ask` prompted (Hooks output channel) | `docs/HOOKS.md` §6 updated with the findings |

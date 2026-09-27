@@ -37,7 +37,7 @@ test("scaffold renders the common set for the example config", () => {
   const r = run(["--repo", repo], repo);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   for (const f of ["AGENTS.md", "CLAUDE.md", ".claude/settings.json", ".claude/rules/precedence.md", ".claude/rules/terraform.md",
-                   ".claude/rules/pipelines.md", ".claude/rules/docker.md", ".claude/rules/versioning.md", ".claude/rules/branching.md", ".gitignore", ".dockerignore", ".slipway/evidence"]) {
+                   ".claude/rules/pipelines.md", ".claude/rules/docker.md", ".claude/rules/versioning.md", ".claude/rules/branching.md", ".gitignore", ".dockerignore"]) {
     assert.ok(exists(repo, f), `missing ${f}`);
   }
   const agents = read(repo, "AGENTS.md");
@@ -223,6 +223,24 @@ test("registry_scope defaults to per-repository: the registry is created, no rea
   // existing is implemented for acr only
   const ghcr = mkRepo((c) => { c.options.registry_scope = "existing"; c.options.registry = "ghcr"; });
   const v2 = validate(path.join(ghcr, ".slipway", "config.yaml")); assert.notEqual(v2.status, 0);
+});
+
+test("evidence_store: release (default) renders the GitHub Release hub and no evidence folder; repo renders the folder and no release steps", () => {
+  const repo = mkRepo();
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
+  assert.ok(!exists(repo, ".slipway/evidence"), "no .slipway/evidence with the release store");
+  const ci = read(repo, ".github/workflows/_ci.yml"), cd = read(repo, ".github/workflows/_cd.yml"), caller = read(repo, ".github/workflows/slipway-demo-api-cd.yml");
+  assert.match(ci, /GitHub Release \$\{\{ inputs\.tag_prefix \}\}\$\{\{ needs\.version\.outputs\.version \}\} \(evidence hub\)/); assert.match(ci, /gh release create "\$TAG" --verify-tag/); assert.match(ci, /gh release upload "\$TAG" release-manifest\.json --clobber/);
+  assert.match(cd, /Attach deploy evidence to the GitHub Release/); assert.match(cd, /gh release upload "\$TAG" deploy-"\$ENV"-\* --clobber/); assert.match(cd, /tag_prefix:\n\s+description:/);
+  assert.match(caller, /contents: write/); assert.match(caller, /tag_prefix: api\/v/);
+  assert.match(read(repo, "AGENTS.md"), /attached to the GitHub Release of the tag/); assert.doesNotMatch(read(repo, "AGENTS.md"), /\.slipway\/evidence\/<app>\/` \| Verification records/);
+  const repo2 = mkRepo((c) => { c.options.evidence_store = "repo"; });
+  const r2 = run(["--repo", repo2], repo2); assert.equal(r2.status, 0, r2.stderr);
+  assert.ok(exists(repo2, ".slipway/evidence/.gitkeep"), ".slipway/evidence rendered with the repo store");
+  assert.doesNotMatch(read(repo2, ".github/workflows/_ci.yml"), /gh release/); assert.doesNotMatch(read(repo2, ".github/workflows/_cd.yml"), /Attach deploy evidence/);
+  assert.match(read(repo2, ".github/workflows/slipway-demo-api-cd.yml"), /contents: read/);
+  assert.match(read(repo2, "AGENTS.md"), /writes \.slipway\/evidence\/<app>\/<tag>\.md/);
+  tfCheck(path.join(repo, "infra", "apps", "api"));
 });
 
 test("one root module per app (compute=aca) renders and passes terraform fmt/validate", () => {

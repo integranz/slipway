@@ -81,7 +81,7 @@ The phases run in order and the command resumes from whatever exists, so you can
 | Foundation | `terraform plan` for registry, key vault, identity, logs and the Container Apps environment, then the apply | the prompt shows the plan summary; your answer is the approval |
 | Release | push or merge; one CI per app builds only the apps whose inputs changed | your merge when the branch is protected |
 | Deploy | one CD per app plans, waits at the `dev` environment, applies exactly the reviewed plan, smoke-tests | your approval, in the session or on GitHub |
-| Verify and track | falsifiable claims per app written to `.slipway/evidence/<app>/<tag>.md`; the story's subtasks closed | nothing |
+| Verify and track | falsifiable claims per app; the report is attached to the GitHub Release of the tag (`evidence_store: release`, default) or committed under `.slipway/evidence/` (`repo`); the story's subtasks closed | nothing |
 
 `--yes` runs without questions and stops with instructions at every step that needs a human; `--until <phase>` stops early; `--env <name>` targets another environment.
 
@@ -93,7 +93,7 @@ The phases run in order and the command resumes from whatever exists, so you can
 - Pull requests run every app's `changes` gate; untouched apps report skipped-and-passed, so the checks `<app> changes` and `<app> ci` can be required on the branch.
 - A green CI on the default branch starts that app's CD (`cd_trigger: on-ci-success`), which waits for the environment approval; with `cd_approval: in-session`, `/slipway:deploy` asks you and approves through the GitHub API under your own account after a forced prompt.
 - A new piece of work gets a new story: `/slipway:ticket story create --title "…" [--epic KEY]`; every skill then keeps one subtask per unit of work current, and the story closes itself when the last subtask is done.
-- Verify after every deployment: `/slipway:verify <app> <env> <tag>`; commit the evidence through a pull request.
+- Verify after every deployment: `/slipway:verify <app> <env> <tag>`. The report lands on the GitHub Release of the tag next to the release manifest and the deploy outputs; with `evidence_store: repo` you commit it through a pull request instead.
 
 ## Commands
 | Command | Purpose | Example |
@@ -103,7 +103,7 @@ The phases run in order and the command resumes from whatever exists, so you can
 | `/slipway:dockerize <app>` | build and prove one app's image locally | `/slipway:dockerize api` |
 | `/slipway:plan <env> --layer foundation\|apps/<app>` | Terraform plan, never apply | `/slipway:plan dev --layer foundation` |
 | `/slipway:deploy <app> <tag> <env>` | dispatch or watch one app's CD to the approval and beyond | `/slipway:deploy api 0.2.6 dev` |
-| `/slipway:verify <app> <env> <tag>` | falsifiable post-deployment claims, evidence file | `/slipway:verify web dev 0.2.6` |
+| `/slipway:verify <app> <env> <tag>` | falsifiable post-deployment claims; report on the GitHub Release (or a committed file) | `/slipway:verify web dev 0.2.6` |
 | `/slipway:ticket …` | story, subtasks, comments, sync of queued updates | `/slipway:ticket show` |
 
 Details, defaults and safety notes per command: `docs/COMMAND-CATALOG.md`.

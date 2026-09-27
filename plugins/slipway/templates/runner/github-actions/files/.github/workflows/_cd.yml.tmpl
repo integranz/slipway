@@ -24,6 +24,11 @@ on:
       image_repository:
         type: string
         required: true
+      tag_prefix:
+        description: Git tag prefix of this app (<app>/v); the GitHub Release <prefix><tag> receives the deploy evidence
+        type: string
+        required: false
+        default: ""
 
 env:
   TF_IN_AUTOMATION: "true"
@@ -151,7 +156,17 @@ jobs:
           PY
           cat smoke.txt; { echo "### Smoke test"; echo '```'; cat smoke.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit $fail
-      - uses: actions/upload-artifact@v7
+<%#eq options.evidence_store "release"%>      - name: Attach deploy evidence to the GitHub Release ${{ inputs.tag_prefix }}${{ inputs.tag }}
+        if: always()
+        working-directory: ${{ inputs.infra_dir }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag_prefix }}${{ inputs.tag }}"; ENV="${{ inputs.environment }}"
+          for f in outputs.json apply.txt smoke.txt; do [ -f "$f" ] && cp "$f" "deploy-$ENV-$f"; done
+          gh release upload "$TAG" deploy-"$ENV"-* --clobber \
+            || echo "::warning::GitHub Release $TAG not found or not writable; the deploy evidence stays in the workflow artifact only"
+<%/eq%>      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: deploy-evidence-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.tag }}
