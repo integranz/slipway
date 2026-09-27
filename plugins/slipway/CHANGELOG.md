@@ -1,3 +1,9 @@
+## [1.4.3](https://github.com/integranz/slipway/compare/v1.4.2...v1.4.3) (2026-09-27)
+
+### Bug Fixes
+
+* **pipelines:** Terraform lock files never trigger a build or bump a version ([#18](https://github.com/integranz/slipway/issues/18)) ([8c2dc29](https://github.com/integranz/slipway/commit/8c2dc2971689cf9df092d42edf62ce68298b4a4e))
+
 ## [1.4.2](https://github.com/integranz/slipway/compare/v1.4.1...v1.4.2) (2026-09-24)
 
 ### Bug Fixes
