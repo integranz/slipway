@@ -1,3 +1,9 @@
+## [1.7.1](https://github.com/integranz/slipway/compare/v1.7.0...v1.7.1) (2026-09-28)
+
+### Bug Fixes
+
+* **onboard:** list the models the key may use (dry run and invalid_model path) ([#23](https://github.com/integranz/slipway/issues/23)) ([a7e5b7a](https://github.com/integranz/slipway/commit/a7e5b7a606a0b7caeac8927168b11bb87a2d1578))
+
 ## [1.7.0](https://github.com/integranz/slipway/compare/v1.6.0...v1.7.0) (2026-09-27)
 
 ### Features
