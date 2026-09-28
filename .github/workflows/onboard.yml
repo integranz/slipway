@@ -3,6 +3,8 @@
 # plugin, runs `/slipway:launch --yes --until bootstrap` and commits on a branch; Cursor opens the pull request.
 # The agent receives no credential. This workflow needs the repository secret CURSOR_API_KEY (a Cursor team
 # service-account key or a personal API key, cursor.com/dashboard -> API Keys); it is used only to call the API.
+# Model: omitted by default (Cursor's user/team/system default); when that default is refused (invalid_model), a dry run
+# lists the ids the key may use and the failure path prints them; pass -f model=<id>.
 name: onboard
 on:
   workflow_dispatch:
@@ -27,9 +29,9 @@ on:
         default: ""
         type: string
       model:
-        description: Cursor model id for the agent (empty = Cursor's default)
+        description: "Cursor model id for the agent (GET /v1/models; empty = the account's default, which this account's API refused on 2026-09-27)"
         required: false
-        default: ""
+        default: claude-opus-5-5
         type: string
       dry_run:
         description: Print the request instead of calling the Cloud Agents API
@@ -74,8 +76,19 @@ jobs:
           echo "request: $(jq -c 'del(.prompt)' request.json) + prompt ($(wc -c < prompt.txt) bytes)"
       - name: Dry run
         if: ${{ inputs.dry_run }}
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
+          set -euo pipefail
           echo "dry run: the request below was NOT sent"; jq '.prompt.text |= "<prompt, see the step summary>"' request.json
+          # Models the key may pass as model.id (GET /v1/models is read-only). Omitting `model` uses the account's default,
+          # which can be a model the API refuses (invalid_model, seen 2026-09-27): pick one of these with -f model=<id>.
+          if [ -n "$CURSOR_API_KEY" ]; then
+            if curl -sS -f -o models.json -u "$CURSOR_API_KEY:" https://api.cursor.com/v1/models; then
+              echo "models available to this key (use -f model=<id>):"; jq -r '.items[] | "  \(.id)  \(.displayName // "")"' models.json
+              { echo; echo "Models available to this key (\`-f model=<id>\`):"; jq -r '.items[] | "- \`\(.id)\` \(.displayName // "")"' models.json; } >> "$GITHUB_STEP_SUMMARY"
+            else echo "::warning::GET /v1/models failed; the key may lack API access"; fi
+          else echo "CURSOR_API_KEY is not set: models not listed"; fi
       - name: Start the cloud agent
         if: ${{ !inputs.dry_run }}
         env:
@@ -87,7 +100,15 @@ jobs:
           code="$(curl -sS -o response.json -w '%{http_code}' -X POST https://api.cursor.com/v1/agents \
             -u "$CURSOR_API_KEY:" -H 'Content-Type: application/json' --data @request.json)"
           if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
-            echo "::error::Cloud Agents API answered HTTP $code"; jq . response.json 2>/dev/null || cat response.json; exit 1
+            echo "::error::Cloud Agents API answered HTTP $code"; jq . response.json 2>/dev/null || cat response.json
+            if [ "$(jq -r '.error.code // empty' response.json 2>/dev/null)" = "invalid_model" ]; then
+              # The account's default model is not usable through the API: list what is, so the retry is one command.
+              if curl -sS -f -o models.json -u "$CURSOR_API_KEY:" https://api.cursor.com/v1/models; then
+                echo "retry with one of these: -f model=<id>"; jq -r '.items[] | "  \(.id)  \(.displayName // "")"' models.json
+                { echo; echo "**invalid_model**: retry with \`-f model=<id>\`, one of:"; jq -r '.items[] | "- \`\(.id)\` \(.displayName // "")"' models.json; } >> "$GITHUB_STEP_SUMMARY"
+              fi
+            fi
+            exit 1
           fi
           id="$(jq -r '.agent.id // .id // empty' response.json)"; url="$(jq -r '.agent.url // .url // empty' response.json)"
           [ -n "$url" ] || url="https://cursor.com/agents/$id"
