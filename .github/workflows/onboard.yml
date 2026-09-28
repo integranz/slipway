@@ -29,9 +29,9 @@ on:
         default: ""
         type: string
       model:
-        description: Cursor model id for the agent (empty = Cursor's default)
+        description: "Cursor model id for the agent (GET /v1/models; empty = the account's default, which this account's API refused on 2026-09-27)"
         required: false
-        default: ""
+        default: claude-opus-5-5
         type: string
       dry_run:
         description: Print the request instead of calling the Cloud Agents API
