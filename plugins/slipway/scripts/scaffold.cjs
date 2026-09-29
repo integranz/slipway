@@ -72,6 +72,7 @@ for (const item of plan) {
     try { content = render(content, item.context); }
     catch (e) { console.error(`template error in ${path.relative(T, item.src)}: ${e.message}\nnothing was written`); process.exit(1); }
     if (/<%/.test(content)) { console.error(`template error in ${path.relative(T, item.src)}: unrendered '<%' left in output\nnothing was written`); process.exit(1); }
+    if (!content.trim()) { console.log(`  omit    ${relDest} (template renders empty for these options)`); continue; } // whole-file conditionals, e.g. slipway-tracker.yml
   }
   rendered.push({ ...item, relDest, content });
 }

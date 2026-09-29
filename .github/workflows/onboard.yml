@@ -46,6 +46,8 @@ concurrency:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
+    outputs:
+      agent_id: ${{ steps.start.outputs.agent_id }}
     steps:
       - uses: actions/checkout@v4
       - name: Build the prompt
@@ -90,6 +92,7 @@ jobs:
             else echo "::warning::GET /v1/models failed; the key may lack API access"; fi
           else echo "CURSOR_API_KEY is not set: models not listed"; fi
       - name: Start the cloud agent
+        id: start
         if: ${{ !inputs.dry_run }}
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
@@ -112,5 +115,73 @@ jobs:
           fi
           id="$(jq -r '.agent.id // .id // empty' response.json)"; url="$(jq -r '.agent.url // .url // empty' response.json)"
           [ -n "$url" ] || url="https://cursor.com/agents/$id"
-          echo "agent $id started: $url"
+          echo "agent $id started: $url"; echo "agent_id=$id" >> "$GITHUB_OUTPUT"
           { echo; echo "- agent: [$id]($url)"; echo "- the agent commits on \`slipway/onboard\`; Cursor pushes its branch and opens the pull request on $REPOSITORY"; } >> "$GITHUB_STEP_SUMMARY"
+
+  # Annotates the pull request the agent produced: waits for the run to finish, reads the PR URL from the run's git
+  # snapshot, and posts the human steps (setup-azure, secrets, environment, first approval) rendered from the branch's
+  # .slipway/SETUP.md. Needs the repository secret ONBOARD_GITHUB_TOKEN: a fine-grained token with Pull requests: write,
+  # Issues: write (labels), Contents: read and Metadata: read on the organisation's repositories. Without it the job
+  # only reports the PR URL.
+  annotate:
+    needs: dispatch
+    if: ${{ !inputs.dry_run && needs.dispatch.outputs.agent_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Wait for the agent run and find its pull request
+        id: wait
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          AGENT_ID: ${{ needs.dispatch.outputs.agent_id }}
+        run: |
+          set -euo pipefail
+          # Poll until the run ends and Cursor has opened the pull request (git.branches[].prUrl); after the run ends,
+          # allow five more minutes for the PR to appear, then give up without failing (the transcript has the report).
+          deadline=$((SECONDS + 60*60)); pr=""; status=""; ended_at=""
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            agent="$(curl -sS -u "$CURSOR_API_KEY:" "https://api.cursor.com/v1/agents/$AGENT_ID")"
+            run_id="$(printf '%s' "$agent" | jq -r '.latestRunId // empty')"
+            if [ -n "$run_id" ]; then
+              run="$(curl -sS -u "$CURSOR_API_KEY:" "https://api.cursor.com/v1/agents/$AGENT_ID/runs/$run_id")"
+              status="$(printf '%s' "$run" | jq -r '.status // empty')"
+              pr="$(printf '%s' "$run" | jq -r '[.git.branches[]?.prUrl // empty][0] // empty')"
+            fi
+            [ -n "$pr" ] || pr="$(printf '%s' "$agent" | jq -r '[.git.branches[]?.prUrl // empty][0] // empty')"
+            [ -z "$pr" ] || break
+            case "$status" in
+              FINISHED|ERROR|CANCELLED|EXPIRED) ended_at="${ended_at:-$SECONDS}"; [ $((SECONDS - ended_at)) -lt 300 ] || break;;
+            esac
+            sleep 30
+          done
+          echo "status=$status" >> "$GITHUB_OUTPUT"; echo "pr=$pr" >> "$GITHUB_OUTPUT"
+          echo "agent $AGENT_ID run status: ${status:-unknown}; pull request: ${pr:-none}"
+          { echo; echo "- run status: \`${status:-unknown}\`"; if [ -n "$pr" ]; then echo "- pull request: $pr"; else echo "- pull request: none found (the agent may have stopped with a report only; read the transcript)"; fi; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment the human steps on the pull request
+        if: ${{ steps.wait.outputs.pr != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.ONBOARD_GITHUB_TOKEN }}
+          PR: ${{ steps.wait.outputs.pr }}
+          AGENT_ID: ${{ needs.dispatch.outputs.agent_id }}
+          REPOSITORY: ${{ inputs.repository }}
+        run: |
+          set -euo pipefail
+          [ -n "$GH_TOKEN" ] || { echo "::warning::ONBOARD_GITHUB_TOKEN is not set: the pull request was found but not annotated ($PR)"; exit 0; }
+          head="$(gh pr view "$PR" --json headRefName --jq .headRefName)"
+          setup="$(gh api "repos/$REPOSITORY/contents/.slipway/SETUP.md?ref=$head" -H 'Accept: application/vnd.github.raw' 2>/dev/null || echo "(.slipway/SETUP.md not found on $head)")"
+          {
+            echo "## slipway onboarding — human steps before the first deployment"
+            echo
+            echo "This pull request was produced unattended by a Cursor Cloud Agent (https://cursor.com/agents/$AGENT_ID) started from the slipway onboarding workflow. Nothing in Azure, GitHub or Jira was created or changed by it."
+            echo
+            echo "1. Review and merge this pull request."
+            echo "2. In **your** terminal, from the repository root on the default branch, run the Azure prerequisites (Entra app registration with federated credentials, resource groups, Terraform state storage, the \`AZURE_*\` repository secrets):"
+            echo; echo '   ```'; echo '   bash .slipway/setup-azure.sh --apply --set-github-secrets'; echo '   ```'
+            echo "3. Then run \`/slipway:launch\` in Claude Code or Cursor on a desktop: it resumes at the cloud and GitHub phases (environment with you as required reviewer, pull-request-only ruleset, foundation plan → your approval → apply) and continues into the first CI/CD run, which waits for your approval."
+            echo
+            echo "<details><summary><code>.slipway/SETUP.md</code> from this branch (every step, who does it, how)</summary>"; echo; echo "$setup"; echo; echo "</details>"
+          } > comment.md
+          gh pr comment "$PR" --body-file comment.md
+          gh label create slipway-onboarding -R "$REPOSITORY" --description "Onboarding pull request produced by the slipway cloud dispatch" --color 0E8A16 2>/dev/null || true
+          gh pr edit "$PR" --add-label slipway-onboarding || echo "::warning::could not add the label (token permissions?)"
+          echo "- annotated: comment posted and label \`slipway-onboarding\` added" >> "$GITHUB_STEP_SUMMARY"
