@@ -6,7 +6,7 @@ const validateSchema = require("./validate-config.generated.cjs");
 const PLUGIN_ROOT = path.resolve(__dirname, "..", "..");
 const OPTIONS_PATH = path.join(PLUGIN_ROOT, "templates", "common", "slipway", "options.yaml");
 // Optional dimensions and the value they take when the config omits them.
-const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui", config_store: "env", database: "none", registry_scope: "per-repository", apply_gate: "prompt", evidence_store: "release" };
+const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui", config_store: "env", database: "none", registry_scope: "per-repository", apply_gate: "prompt", evidence_store: "release", tracker_transport: "mcp" };
 
 function loadYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
 function loadOptions() { return loadYaml(OPTIONS_PATH); }
@@ -44,6 +44,9 @@ function checkConfig(config, options) {
     if (opt.registry && opt.registry !== config.options.registry) {
       errors.push(`options.${dim}=${value} is implemented for registry=${opt.registry} only (registry=${config.options.registry})`);
     }
+  }
+  if (config.options.tracker_transport && config.options.tracker_transport !== "mcp" && config.options.tracker !== "jira") {
+    errors.push(`options.tracker_transport=${config.options.tracker_transport} needs options.tracker=jira (the REST script and the token MCP server are Jira Cloud transports)`);
   }
   if (config.options.registry_scope === "per-repository" && config.azure && config.azure.acr_resource_group && config.azure.acr_resource_group !== config.azure.resource_group) {
     errors.push(`azure.acr_resource_group is set to '${config.azure.acr_resource_group}' but options.registry_scope=per-repository creates the registry in azure.resource_group; remove it or choose registry_scope=existing`);
@@ -221,12 +224,16 @@ function derive(config, options, repoRoot) {
     apply_gate: config.options.apply_gate,
     evidence_store: config.options.evidence_store,
     evidence_release: config.options.evidence_store === "release",
+    tracker_transport: config.options.tracker_transport,
+    tracker_rest: config.options.tracker === "jira" && config.options.tracker_transport !== "mcp",
+    tracker_token_mcp: config.options.tracker === "jira" && config.options.tracker_transport === "both",
     acr_resource_group: (config.azure && (config.azure.acr_resource_group || config.azure.resource_group)) || null,
     marketplace: { name: options.distribution.marketplace, repo: options.distribution.repo, plugin: options.distribution.plugin },
     registry_host: registryHost,
     pipelines, shared_paths: sharedPaths, multi_app: apps.length > 1,
     tracking: { enabled: config.options.tracker !== "none", tracker: config.options.tracker,
-      story_key: config.jira?.story_key || null, epic_key: config.jira?.epic_key || null, subtask_issue_type: config.jira?.subtask_issue_type || "Subtask" },
+      story_key: config.jira?.story_key || null, epic_key: config.jira?.epic_key || null, subtask_issue_type: config.jira?.subtask_issue_type || "Subtask",
+      story_title: `Onboard ${config.project.name} to slipway delivery` },
     apps,
     has_frontend: apps.some(a => a.kind === "frontend"),
     has_dotnet: apps.some(a => a.is_dotnet),

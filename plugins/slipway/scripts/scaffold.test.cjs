@@ -416,6 +416,26 @@ test("validate-config reports OK for the example", () => {
   const v = validate(EXAMPLE); assert.equal(v.status, 0, v.stderr); assert.match(v.stdout, /valid \(2 app\(s\)/);
 });
 
+test("tracker_transport: mcp (default) renders no tracker workflow, no Jira steps, no mcp.json; rest renders the workflow and the CD steps; both adds .cursor/mcp.json and uv", () => {
+  const repo = mkRepo(); const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
+  assert.ok(!exists(repo, ".github/workflows/slipway-tracker.yml"), "no tracker workflow by default"); assert.match(r.stdout, /omit\s+\.github\/workflows\/slipway-tracker\.yml/);
+  assert.ok(!exists(repo, ".cursor/mcp.json")); assert.doesNotMatch(read(repo, ".github/workflows/_cd.yml"), /jira-rest/);
+  const rest = mkRepo((c) => { c.options.tracker_transport = "rest"; }); const r2 = run(["--repo", rest], rest); assert.equal(r2.status, 0, r2.stderr);
+  const wf = read(rest, ".github/workflows/slipway-tracker.yml"); const version = require("./lib/config.cjs").pluginVersion();
+  assert.match(wf, /types: \[closed\]/); assert.match(wf, /startsWith\(github\.event\.pull_request\.head\.ref, 'slipway\/'\)/);
+  assert.ok(wf.includes(`ref: v${version}`), "plugin checked out at the rendering version"); assert.match(wf, /story ensure --title "Onboard adlc-demo to slipway delivery"/);
+  assert.match(wf, /subtask done "Bootstrap adlc-demo"/); assert.match(wf, /subtask done "Dockerize api"/); assert.match(wf, /subtask done "Dockerize web"/);
+  assert.match(wf, /JIRA_API_TOKEN: \$\{\{ secrets\.JIRA_API_TOKEN \}\}/); assert.match(wf, /JIRA_EMAIL: \$\{\{ vars\.JIRA_EMAIL \}\}/); assert.doesNotMatch(wf, /<%/);
+  const cd = read(rest, ".github/workflows/_cd.yml");
+  assert.match(cd, /subtask start "Deploy \$\{\{ inputs\.app \}\} \$\{\{ inputs\.tag \}\} → \$\{\{ inputs\.environment \}\}"/); assert.match(cd, /subtask done "\$T" --message "Applied and smoke-tested/); assert.match(cd, /subtask review "\$T"/); assert.match(cd, /id: smoke/);
+  assert.ok(!exists(rest, ".cursor/mcp.json"), "rest alone declares no MCP server"); assert.match(read(rest, ".slipway/SETUP.md"), /JIRA_API_TOKEN/); assert.match(read(rest, "AGENTS.md"), /transport `rest`/);
+  const both = mkRepo((c) => { c.options.tracker_transport = "both"; }); const r3 = run(["--repo", both], both); assert.equal(r3.status, 0, r3.stderr);
+  const mcp = JSON.parse(read(both, ".cursor/mcp.json")); assert.equal(mcp.mcpServers.jira.command, "uvx"); assert.equal(mcp.mcpServers.jira.env.JIRA_API_TOKEN, "${env:JIRA_API_TOKEN}"); assert.equal(mcp.mcpServers.jira.env.JIRA_URL, "https://integranz.atlassian.net");
+  assert.match(read(both, ".slipway/cursor-install.sh"), /astral\.sh\/uv\/install\.sh/); assert.match(read(both, "AGENTS.md"), /token-based `jira` MCP server/);
+  const none = mkRepo((c) => { c.options.tracker = "none"; c.options.tracker_transport = "rest"; }); const r4 = run(["--repo", none], none);
+  assert.equal(r4.status, 1); assert.match(r4.stderr, /tracker_transport=rest needs options\.tracker=jira/);
+});
+
 test("cursor cloud environment: environment.json runs the committed install script, pinned to the rendering plugin version", () => {
   const repo = mkRepo();
   const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr + r.stdout);

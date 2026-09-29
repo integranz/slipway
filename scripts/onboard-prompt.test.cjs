@@ -40,5 +40,10 @@ test("onboard.yml: dispatch inputs, no input interpolation inside run blocks, AP
   assert.match(runs, /autoCreatePR: true/); assert.match(runs, /startingRef: \$ref/);
   assert.ok((runs.match(/https:\/\/api\.cursor\.com\/v1\/models/g) || []).length >= 2, "dry run and the invalid_model path must list the usable models");
   const start = steps.find((s) => s.name === "Start the cloud agent"); assert.ok(start.env.CURSOR_API_KEY.includes("secrets.CURSOR_API_KEY"));
-  assert.match(start.if, /!inputs\.dry_run/);
+  assert.match(start.if, /!inputs\.dry_run/); assert.match(start.run, /agent_id=\$id/);
+  const annotate = wf.jobs.annotate; assert.ok(annotate, "annotate job"); assert.equal(annotate.needs, "dispatch"); assert.match(annotate.if, /needs\.dispatch\.outputs\.agent_id/);
+  const aruns = annotate.steps.filter((s) => s.run).map((s) => s.run).join("\n");
+  assert.equal((aruns.match(/\$\{\{\s*inputs\./g) || []).length, 0, "annotate inputs must come through env");
+  assert.match(aruns, /\/v1\/agents\/\$AGENT_ID\/runs\//); assert.match(aruns, /prUrl/); assert.match(aruns, /setup-azure\.sh --apply --set-github-secrets/); assert.match(aruns, /gh pr comment "\$PR" --body-file comment\.md/);
+  const comment = annotate.steps.find((s) => s.name === "Comment the human steps on the pull request"); assert.ok(comment.env.GH_TOKEN.includes("secrets.ONBOARD_GITHUB_TOKEN"));
 });
