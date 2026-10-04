@@ -80,6 +80,14 @@ dimensions:
       asana:        { status: later,       label: Asana }
       azure-devops: { status: later,       label: Azure DevOps Boards }
 
+  tracker_transport:
+    question: How do unattended runs and the generated workflows reach the tracker?
+    depends_on: tracker
+    options:
+      mcp:  { status: implemented, label: "Atlassian Rovo MCP Server in sessions only (OAuth per user); unattended runs queue their updates for /slipway:ticket sync" }
+      rest: { status: implemented, label: "Plus the plugin's Jira REST script (JIRA_EMAIL + JIRA_API_TOKEN from the environment): the generated slipway-tracker.yml closes the Bootstrap and Dockerize subtasks when the onboarding pull request merges, _cd.yml keeps the Deploy subtasks current, and unattended sessions use the same script" }
+      both: { status: implemented, label: "REST as above, plus a token-based Jira MCP server (mcp-atlassian via uvx) declared in .cursor/mcp.json, so Cursor sessions in the cloud get Jira tools from JIRA_EMAIL / JIRA_API_TOKEN without a browser login" }
+
   secret_store:
     question: Where do runtime secrets live?
     depends_on: cloud

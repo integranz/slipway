@@ -41,7 +41,11 @@ for rc in "$HOME/.bashrc" "$HOME/.profile"; do
   printf 'export SLIPWAY_PLUGIN_ROOT="%s" CLAUDE_PLUGIN_ROOT="%s" SLIPWAY_SESSION_ATTENDED=0 SLIPWAY_HOST=cursor # slipway cloud env\n' "$LOCAL" "$LOCAL" >> "$rc"
 done
 
-# 4. toolchain (best effort)
+<%#if derived.tracker_token_mcp%># 3b. uv (runs the token-based Jira MCP server `uvx mcp-atlassian` declared in .cursor/mcp.json; credentials come from the
+#     Cloud Agent Secrets JIRA_EMAIL and JIRA_API_TOKEN as environment variables, never from a file)
+if ! command -v uvx >/dev/null 2>&1; then curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1 || echo "WARN uv install failed; the jira MCP server will not start" >&2; fi
+for rc in "$HOME/.bashrc" "$HOME/.profile"; do grep -q 'slipway uv path' "$rc" 2>/dev/null || printf 'export PATH="$HOME/.local/bin:$PATH" # slipway uv path\n' >> "$rc"; done
+<%/if%># 4. toolchain (best effort)
 if [ -f .slipway/cloud-setup.sh ]; then bash .slipway/cloud-setup.sh || echo "WARN .slipway/cloud-setup.sh failed; plan and verify steps may report UNVERIFIABLE" >&2; fi
 for t in bash python3 node git docker gh terraform az; do
   if command -v "$t" >/dev/null 2>&1; then echo "tool: $t -> $(command -v "$t")"; else echo "tool: $t missing"; fi

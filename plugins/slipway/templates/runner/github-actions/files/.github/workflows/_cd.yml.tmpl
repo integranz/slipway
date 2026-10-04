@@ -84,7 +84,22 @@ jobs:
             ${{ inputs.infra_dir }}/tfplan
             ${{ inputs.infra_dir }}/plan.txt
           retention-days: 1
-
+<%#if derived.tracker_rest%>      - name: Tracker — deploy subtask In Progress (Jira REST)
+        if: always()
+        uses: actions/checkout@v7
+        with:
+          repository: <% derived.marketplace.repo %>
+          ref: v<% derived.plugin_version %>
+          path: .slipway-plugin
+      - name: Tracker — subtask start
+        if: always()
+        env:
+          JIRA_EMAIL: ${{ vars.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          J="node .slipway-plugin/plugins/slipway/scripts/jira-rest.cjs --repo . --soft"
+          $J subtask start "Deploy ${{ inputs.app }} ${{ inputs.tag }} → ${{ inputs.environment }}" --message "Plan ${{ job.status }}: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} (waits for the ${{ inputs.environment }} approval)"
+<%/if%>
   apply:
     name: apply ${{ inputs.app }} ${{ inputs.tag }} → ${{ inputs.environment }}
     needs: plan
@@ -126,6 +141,7 @@ jobs:
           with open("$GITHUB_OUTPUT","a") as f: f.write(f"url={o.get('url','')}\n")
           PY
       - name: Smoke test
+        id: smoke
         working-directory: ${{ inputs.infra_dir }}
         run: |
           set -e; fail=0
@@ -166,7 +182,26 @@ jobs:
           for f in outputs.json apply.txt smoke.txt; do [ -f "$f" ] && cp "$f" "deploy-$ENV-$f"; done
           gh release upload "$TAG" deploy-"$ENV"-* --clobber \
             || echo "::warning::GitHub Release $TAG not found or not writable; the deploy evidence stays in the workflow artifact only"
-<%/eq%>      - uses: actions/upload-artifact@v7
+<%/eq%><%#if derived.tracker_rest%>      - name: Tracker — deploy subtask Done or In Review (Jira REST)
+        if: always()
+        uses: actions/checkout@v7
+        with:
+          repository: <% derived.marketplace.repo %>
+          ref: v<% derived.plugin_version %>
+          path: .slipway-plugin
+      - name: Tracker — subtask done or review
+        if: always()
+        env:
+          JIRA_EMAIL: ${{ vars.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          SMOKE: ${{ steps.smoke.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          J="node .slipway-plugin/plugins/slipway/scripts/jira-rest.cjs --repo . --soft"
+          T="Deploy ${{ inputs.app }} ${{ inputs.tag }} → ${{ inputs.environment }}"
+          if [ "$SMOKE" = "success" ]; then $J subtask done "$T" --message "Applied and smoke-tested: $RUN_URL"<%#eq options.evidence_store "release"%> --evidence "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ inputs.tag_prefix }}${{ inputs.tag }}"<%/eq%>
+          else $J subtask review "$T" --message "Apply or smoke test did not succeed (smoke: $SMOKE): $RUN_URL"; fi
+<%/if%>      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: deploy-evidence-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.tag }}

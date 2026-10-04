@@ -119,6 +119,8 @@ Details, defaults and safety notes per command: `docs/COMMAND-CATALOG.md`.
 - **Tracking never blocks.** Jira through the Atlassian Rovo MCP Server: one story per delivery, one subtask per unit of work, read-back after every write. `tracker: none` disables it; an unreachable Jira queues updates in `.slipway/tracking-queue.jsonl` for `/slipway:ticket sync`.
 - **Immutable tags.** Images are `<repo>:<semver>` plus `sha-<short>`, never `latest`; git tags are `<app>/v<semver>`; a re-run of the same CI run reuses the image it already pushed.
 
+**Tracker without a session** (`options.tracker_transport`): `mcp` (default) uses the Atlassian Rovo MCP in sessions only. `rest` adds the plugin's `jira-rest.cjs` (Jira Cloud REST v3, `JIRA_EMAIL` + `JIRA_API_TOKEN` from the environment): the rendered `slipway-tracker.yml` closes the Bootstrap and Dockerize subtasks when the onboarding pull request merges and `_cd.yml` keeps the Deploy subtasks current, with organisation-level credentials. `both` also declares a token-based Jira MCP server (`uvx mcp-atlassian`) in `.cursor/mcp.json` for Cursor sessions, including cloud agents with those two Secrets. Details: `docs/MCP-INTEGRATION.md`.
+
 ## Troubleshooting
 | Symptom | Cause | Fix |
 |---|---|---|

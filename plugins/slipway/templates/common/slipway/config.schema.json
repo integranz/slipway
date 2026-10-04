@@ -170,6 +170,14 @@
             "none"
           ],
           "description": "Where /slipway:verify stores its report: the GitHub Release of the tag (default), a committed file under .slipway/evidence, or nowhere."
+        },
+        "tracker_transport": {
+          "enum": [
+            "mcp",
+            "rest",
+            "both"
+          ],
+          "description": "How unattended runs and the generated workflows reach the tracker: the Rovo MCP in sessions only (default), plus the plugin's Jira REST script with JIRA_EMAIL/JIRA_API_TOKEN (rest), plus a token-based Jira MCP server in .cursor/mcp.json (both). rest and both need tracker: jira."
         }
       }
     },

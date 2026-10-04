@@ -9,12 +9,15 @@ Sources, read 2026-09-27: cursor.com/docs/cloud-agent/api/endpoints (`POST https
 | **Trigger** | `gh workflow run onboard.yml -R integranz/slipway -f repository=<owner/name> [-f ref=main] [-f answers="$(cat answers.txt)"]`, or the same prompt pasted at cursor.com/agents |
 | **Scope** | one repository per run; the agent starts from `ref` (its default branch) |
 | **Identity** | the Cursor account behind `CURSOR_API_KEY` (team service account recommended: PRs by `cursor`, billed to the team pool) |
-| **Secrets** | `CURSOR_API_KEY` on `integranz/slipway` only, used by the workflow to call the API. The agent receives **no** credential: no Azure, no GitHub token, no Jira |
+| **Secrets** | On `integranz/slipway` only: `CURSOR_API_KEY` (calls the Cloud Agents API) and `ONBOARD_GITHUB_TOKEN` (fine-grained token with Pull requests: write, Issues: write, Contents: read, Metadata: read on the organisation's repositories; used by the `annotate` job to comment and label the PR). The agent receives **no** credential: no Azure, no GitHub token, no Jira |
 | **Prompt** | `bash scripts/onboard-prompt.sh <owner/name> --ref <branch> --version <plugin version> [--answers <file>]` |
-| **Output / review path** | one pull request titled `slipway: onboard <name>` with `.slipway/config.yaml`, `AGENTS.md`, `CLAUDE.md`, rules, per-app CI/CD workflows, Terraform modules, Dockerfiles; a report in the agent transcript. A human reviews and merges |
+| **Output / review path** | one pull request titled `slipway: onboard <name>` with `.slipway/config.yaml`, `AGENTS.md`, `CLAUDE.md`, rules, per-app CI/CD workflows, Terraform modules, Dockerfiles; a report in the agent transcript. The workflow's `annotate` job waits for the run, finds the PR (`git.branches[].prUrl` of the run) and posts **the human steps as a PR comment**: merge, `bash .slipway/setup-azure.sh --apply --set-github-secrets` in your terminal, then `/slipway:launch` on a desktop for the remaining phases, with the branch's `.slipway/SETUP.md` folded in; label `slipway-onboarding`. A human reviews and merges |
 | **Guardrails** | the prompt limits the run to preflight + bootstrap; the agent is told to print human-only commands instead of running them. The first run has no repository hooks yet (the scaffold adds them), so the guarantee is the absence of credentials, not the hooks |
 | **Monitoring** | the workflow step summary (prompt, agent id and URL), the agent transcript at cursor.com/agents, the PR |
 | **Rollback** | close the PR and delete the branch; nothing was deployed or configured |
+
+## After the merge: Jira without a session
+With `options.tracker_transport: rest` or `both` in the answers, the rendered repository carries `.github/workflows/slipway-tracker.yml`: when the onboarding pull request merges, it finds or creates the delivery story (`Onboard <name> to slipway delivery`) and closes the `Bootstrap <name>` and `Dockerize <app>` subtasks through the plugin's `jira-rest.cjs` (Jira Cloud REST v3, Basic auth). `_cd.yml` then keeps `Deploy <app> <tag> → <env>` current (In Progress at plan time, Done or In Review after apply and smoke), and the story auto-closes when no subtask is open. Credentials: organisation secret `JIRA_API_TOKEN` and variable `JIRA_EMAIL` (`gh secret set JIRA_API_TOKEN --org integranz --visibility all --body "$(pbpaste)"`, `gh variable set JIRA_EMAIL --org integranz --body <email>`, in your terminal). With `both`, the repository also declares the token-based `jira` MCP server (`uvx mcp-atlassian`) in `.cursor/mcp.json` for Cursor sessions; set `JIRA_EMAIL` and `JIRA_API_TOKEN` in the Cloud Agent **Secrets** tab so cloud sessions get Jira tools without a browser login. The onboarding run itself stays `--no-ticket`: the agent holds no Jira credential.
 
 ## Answers file
 The interview values without a default must be given, one `key: value` per line; the agent treats them as answered. Example:
@@ -31,6 +34,7 @@ jira.site_url: https://integranz.atlassian.net
 jira.project_key: DEVOPS
 options.registry_scope: existing
 azure.acr_resource_group: rg-shared-dev
+options.tracker_transport: both
 ```
 Omit what detections cover (apps, ports, health paths, default branch) and what has a default (`options.*` other than the ones you want to change). No ids, no secrets: the file ends up in the workflow summary and the agent transcript.
 
@@ -41,7 +45,7 @@ The request omits `model` by default, so Cursor resolves the account's default m
 Pick a repository that slipway does **not** deliver yet: on a delivered one (`slipway-demo`, `taskflow`) the bootstrap finds `.slipway/config.yaml`, changes nothing and no onboarding PR appears. A small public test repository with one deployable app (a minimal .NET 8 API or an Express app with a Dockerfile, a `/health` route and a `PORT` variable) plus an answers file with the Azure and Jira identifiers is the right first target; it can be deleted afterwards.
 
 ## Steps
-1. Once: create the Cursor API key (team admin → service account, or your own key) and store it: `gh secret set CURSOR_API_KEY -R integranz/slipway` in **your** terminal (the plugin guards deny secret writes from agent sessions).
+1. Once: create the Cursor API key (team admin → service account, or your own key) and store it: `gh secret set CURSOR_API_KEY -R integranz/slipway` in **your** terminal (the plugin guards deny secret writes from agent sessions). Also once: a fine-grained GitHub token (Pull requests: write, Issues: write, Contents: read, Metadata: read on the organisation's repositories) as `gh secret set ONBOARD_GITHUB_TOKEN -R integranz/slipway`, and for Jira the organisation secret `JIRA_API_TOKEN` + variable `JIRA_EMAIL` (see above).
 2. Dispatch: `gh workflow run onboard.yml -R integranz/slipway -f repository=integranz/<name> -f answers="$(cat answers.txt)"`. Add `-f dry_run=true` to see the request without starting an agent.
 3. Follow the run: `gh run watch -R integranz/slipway`; the step summary shows the prompt and the agent link.
 4. Review the pull request the agent produced; merge it.
@@ -54,6 +58,8 @@ Pick a repository that slipway does **not** deliver yet: on a delivered one (`sl
 - (pending) `launch --yes --until bootstrap` writes `.slipway/config.yaml` from detections plus the answers, or stops with the list of missing values.
 - (pending) Cursor pushes the agent's commit and opens the pull request without the agent pushing (`workOnCurrentBranch: false`, `autoCreatePR: true`). If the PR does not appear, the fallback is `envVars` with a one-hour installation token for `gh pr create`.
 - (pending) Docker availability in the cloud VM (drives whether the image claims are verified or UNVERIFIABLE).
+- (pending) The `annotate` job finds the PR URL in the run's `git.branches[].prUrl`, posts the human-steps comment and adds the label (needs `ONBOARD_GITHUB_TOKEN`).
+- (pending) After the merge, `slipway-tracker.yml` creates the story and closes the Bootstrap/Dockerize subtasks (needs the organisation `JIRA_*` credentials and `tracker_transport: rest|both` in the answers).
 
 ## Proof
 - (pending the owner's first dispatch: date/time UTC, workflow run URL, agent URL, PR URL, the agent's report)
