@@ -1,3 +1,9 @@
+## [1.8.0](https://github.com/integranz/slipway/compare/v1.7.1...v1.8.0) (2026-10-04)
+
+### Features
+
+* **tracker:** tracker_transport option (mcp | rest | both), Jira REST script, post-merge tracker workflow, PR annotation ([#25](https://github.com/integranz/slipway/issues/25)) ([83b6553](https://github.com/integranz/slipway/commit/83b655306f22a8f99e4b5c8406eaaf71802bc48d))
+
 ## [1.7.1](https://github.com/integranz/slipway/compare/v1.7.0...v1.7.1) (2026-09-28)
 
 ### Bug Fixes
