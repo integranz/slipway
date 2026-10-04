@@ -6,6 +6,8 @@ This repository is the plugin source (`plugins/slipway`) and its marketplace for
 
 - [Install in Claude Code](#install-in-claude-code) · [Install in Cursor](#install-in-cursor) · [Usage guide](#usage-guide) · [Commands](#commands) · [Approvals, secrets, tracking](#approvals-secrets-and-tracking) · [Troubleshooting](#troubleshooting) · [Develop](#develop-and-release)
 
+**New here? Read [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md): a step-by-step guide from first setup to day-to-day use and the Cursor automations.**
+
 ## Install in Claude Code
 
 In Claude Code, slipway is a plugin with skills (`/slipway:…` commands), guard hooks, sub-agents and MCP server declarations. Requirements on the machine: Claude Code, `git`, `gh`, `az`, `docker`, `terraform`, `node`, plus the app toolchains (`dotnet`, `npm`) and `nbgv` for repositories using Nerdbank.GitVersioning.
