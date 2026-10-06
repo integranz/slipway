@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Branch tests for the slipway guard hooks. Exit non-zero on any failed expectation.
 set -u
+unset CLAUDE_CODE_SESSION_ATTENDED SLIPWAY_SESSION_ATTENDED   # the host's attended marker must not leak into the unattended cases
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"; P="$(dirname "$H")"
 pass=0; fail=0
 export SLIPWAY_APPROVAL_REPLAY_SECONDS=0   # the replay window is tested in its own block

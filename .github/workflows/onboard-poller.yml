@@ -1,0 +1,54 @@
+# Scheduled onboarding poller (runbook: docs/CURSOR-ONBOARDING.md, "Automatic onboarding"). Every 15 minutes (off the top
+# of the hour, where GitHub delays schedules) scripts/onboard-poller.cjs lists the organisation's repositories, classifies
+# each one deterministically and dispatches onboard.yml for the ones that need onboarding; state lives in one issue per
+# repository. No LLM runs here; the only agent run is the one onboard.yml starts (at most ONBOARD_MAX_DISPATCHES per tick).
+# Needs: secret ONBOARD_GITHUB_TOKEN (fine-grained: Contents read, Issues write, Metadata read on the organisation's
+# repositories) and the repository variable ONBOARD_ANSWERS_TEMPLATE (organisation defaults with <name> placeholders).
+# GitHub disables scheduled workflows in a public repository after 60 days without repository activity: re-enable it under
+# Actions → onboard-poller → Enable workflow.
+name: onboard-poller
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Classify and report only; write nothing, dispatch nothing
+        required: false
+        default: false
+        type: boolean
+      repository:
+        description: Limit the tick to one repository (owner/name)
+        required: false
+        default: ""
+        type: string
+permissions:
+  contents: read
+  actions: write   # workflow_dispatch of onboard.yml in this repository
+concurrency:
+  group: onboard-poller
+  cancel-in-progress: false
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Poll the organisation
+        env:
+          ONBOARD_GITHUB_TOKEN: ${{ secrets.ONBOARD_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ONBOARD_ANSWERS_TEMPLATE: ${{ vars.ONBOARD_ANSWERS_TEMPLATE }}
+          ONBOARD_MAX_DISPATCHES: ${{ vars.ONBOARD_MAX_DISPATCHES || '2' }}
+          ONBOARD_EXCLUDE: ${{ vars.ONBOARD_EXCLUDE }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          ONLY_REPOSITORY: ${{ inputs.repository }}
+        run: |
+          set -euo pipefail
+          args=()
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          [ -n "$ONLY_REPOSITORY" ] && args+=(--repo "$ONLY_REPOSITORY")
+          node scripts/onboard-poller.cjs "${args[@]}"
