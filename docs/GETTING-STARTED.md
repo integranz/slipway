@@ -155,9 +155,9 @@ This is the automation for "I have a repository with code, make it deployable." 
    ```
    gh secret set CURSOR_API_KEY -R integranz/slipway
    ```
-2. A fine-grained GitHub token for the PR annotation (Pull requests: write, Issues: write, Contents: read, Metadata: read on the organisation's repositories):
+2. A fine-grained GitHub token for the PR annotation and the poller: resource owner = your organisation, all repositories, permissions Contents read, Issues write, Pull requests write (step by step in `docs/CURSOR-ONBOARDING.md`, "Creating `ONBOARD_GITHUB_TOKEN`"):
    ```
-   gh secret set ONBOARD_GITHUB_TOKEN -R integranz/slipway
+   gh secret set ONBOARD_GITHUB_TOKEN -R <org>/slipway --body "$(pbpaste)"
    ```
 3. Jira credentials for the workflows (an Atlassian account with access to the project; copy the API token to the clipboard first):
    ```

@@ -16,6 +16,29 @@ Sources, read 2026-09-27: cursor.com/docs/cloud-agent/api/endpoints (`POST https
 | **Monitoring** | the workflow step summary (prompt, agent id and URL), the agent transcript at cursor.com/agents, the PR |
 | **Rollback** | close the PR and delete the branch; nothing was deployed or configured |
 
+## Creating `ONBOARD_GITHUB_TOKEN` (owner, once)
+A **fine-grained personal access token owned by the organisation**, used only by the workflows (`onboard.yml` annotation job, `onboard-poller.yml`). It is not the `GITHUB_MCP_TOKEN` that cloud agents receive for the GitHub MCP server: that one stays read-only (Actions: read) and lives in the Cloud Agent Secrets tab; this one can write issues and pull-request comments across the organisation and lives only as a GitHub Actions secret. `<org>` below is your GitHub organisation.
+
+1. **Generate** (browser): profile picture → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.
+   - Token name `slipway-onboarding`; description "slipway poller and PR annotation: issues and PR comments across the organisation".
+   - Expiration: a date you put in your calendar. The poller stops silently when the token expires.
+   - **Resource owner: `<org>`** (the organisation, not your personal account). Organisation owners need no approval; GitHub's default policy requires an owner's approval only for tokens of other members.
+   - Repository access: **All repositories**, so repositories created later are covered.
+   - Repository permissions, nothing else: Contents **Read-only**; Issues **Read and write**; Pull requests **Read and write**; Metadata Read-only (added automatically). Organization permissions: none.
+   - Generate and copy the token once; it is shown only now.
+2. **Store** (your terminal, token in the clipboard; agent sessions are denied secret writes by the plugin guards):
+   ```
+   gh secret set ONBOARD_GITHUB_TOKEN -R <org>/slipway --body "$(pbpaste)"
+   ```
+3. **If `<org>` is missing from the resource-owner list**: organisation → Settings → Third-party Access → Personal access tokens → fine-grained tokens must be "Allow access via fine-grained personal access tokens" (GitHub's default is enabled).
+4. **Verify** before the first tick (token still in the clipboard; then clear the clipboard):
+   ```
+   GH_TOKEN="$(pbpaste)" gh api orgs/<org>/repos --jq '.[].full_name'                       # lists every repository
+   GH_TOKEN="$(pbpaste)" gh api 'repos/<org>/<repo>/issues?per_page=1' --jq 'length'          # a number: issues readable
+   GH_TOKEN="$(pbpaste)" gh api repos/<org>/<repo>/contents/.slipway/config.yaml --jq '.path'  # on an onboarded repo: .slipway/config.yaml
+   ```
+5. **Never**: a classic token (too broad), the `GITHUB_MCP_TOKEN` value, or a token with Administration or Secrets permissions (nothing here needs them). Rotate by generating a new token and repeating step 2; the old one can be revoked immediately.
+
 ## Automatic onboarding: the scheduled poller (1.9.0)
 `.github/workflows/onboard-poller.yml` runs `scripts/onboard-poller.cjs` every 15 minutes (cron `7,22,37,52 * * * *`, off the top of the hour where GitHub delays schedules) and on demand (`gh workflow run onboard-poller.yml -R integranz/slipway -f dry_run=true [-f repository=owner/name]`). It replaces the human who typed the dispatch; nothing else changes: `onboard.yml` still starts the one Cursor Cloud Agent and annotates the pull request.
 
@@ -79,7 +102,7 @@ The request omits `model` by default, so Cursor resolves the account's default m
 Pick a repository that slipway does **not** deliver yet: on a delivered one (`slipway-demo`, `taskflow`) the bootstrap finds `.slipway/config.yaml`, changes nothing and no onboarding PR appears. A small public test repository with one deployable app (a minimal .NET 8 API or an Express app with a Dockerfile, a `/health` route and a `PORT` variable) plus an answers file with the Azure and Jira identifiers is the right first target; it can be deleted afterwards.
 
 ## Steps
-1. Once: create the Cursor API key (team admin → service account, or your own key) and store it: `gh secret set CURSOR_API_KEY -R integranz/slipway` in **your** terminal (the plugin guards deny secret writes from agent sessions). Also once: a fine-grained GitHub token (Pull requests: write, Issues: write, Contents: read, Metadata: read on the organisation's repositories) as `gh secret set ONBOARD_GITHUB_TOKEN -R integranz/slipway`, and for Jira the organisation secret `JIRA_API_TOKEN` + variable `JIRA_EMAIL` (see above).
+1. Once: create the Cursor API key (team admin → service account, or your own key) and store it: `gh secret set CURSOR_API_KEY -R integranz/slipway` in **your** terminal (the plugin guards deny secret writes from agent sessions). Also once: `ONBOARD_GITHUB_TOKEN` (section "Creating `ONBOARD_GITHUB_TOKEN`" above), and for Jira the organisation secret `JIRA_API_TOKEN` + variable `JIRA_EMAIL` (see above).
 2. Dispatch: `gh workflow run onboard.yml -R integranz/slipway -f repository=integranz/<name> -f answers="$(cat answers.txt)"`. Add `-f dry_run=true` to see the request without starting an agent.
 3. Follow the run: `gh run watch -R integranz/slipway`; the step summary shows the prompt and the agent link.
 4. Review the pull request the agent produced; merge it.
