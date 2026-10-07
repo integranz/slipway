@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/integranz/slipway/compare/v1.8.0...v1.9.0) (2026-10-07)
+
+### Features
+
+* **onboarding:** scheduled poller — new repositories get an issue and a dispatch without a human ([#27](https://github.com/integranz/slipway/issues/27)) ([3ee3e47](https://github.com/integranz/slipway/commit/3ee3e47aba6c4c54457fd3408da1991221a37354))
+
 ## [1.8.0](https://github.com/integranz/slipway/compare/v1.7.1...v1.8.0) (2026-10-04)
 
 ### Features
