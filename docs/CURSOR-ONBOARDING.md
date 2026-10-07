@@ -117,7 +117,8 @@ Pick a repository that slipway does **not** deliver yet: on a delivered one (`sl
 - (pending) Docker availability in the cloud VM (drives whether the image claims are verified or UNVERIFIABLE).
 - (pending) The `annotate` job finds the PR URL in the run's `git.branches[].prUrl`, posts the human-steps comment and adds the label (needs `ONBOARD_GITHUB_TOKEN`).
 - (pending) After the merge, `slipway-tracker.yml` creates the story and closes the Bootstrap/Dockerize subtasks (needs the organisation `JIRA_*` credentials and `tracker_transport: rest|both` in the answers).
-- (pending) The poller: a new public repository with a `package.json` or `Dockerfile` gets its `slipway onboarding` issue and a dispatch within one tick; a docs-only repository gets the not-deployable issue; a second tick changes nothing.
+- **Done 2026-10-07, poller dry run on GitHub Actions** (owner, https://github.com/integranz/slipway/actions/runs/37651632401, after setting `ONBOARD_ANSWERS_TEMPLATE`): token and template accepted, `3 repositories, 0 dispatched`; `integranz/slipway` → skip (excluded), `slipway-demo` and `taskflow` → skip (onboarded). The tick before it (run 37650892481) failed loudly on the missing template variable, as designed, and wrote nothing.
+- (pending) The poller on a new repository: a public repository with a `package.json` or `Dockerfile` gets its `slipway onboarding` issue and a dispatch within one tick; a docs-only repository gets the not-deployable issue; a second tick changes nothing.
 
 ## Proof
 - (pending the owner's first dispatch: date/time UTC, workflow run URL, agent URL, PR URL, the agent's report)
