@@ -194,6 +194,8 @@ This is the automation for "I have a repository with code, make it deployable." 
    ```
    then `/slipway:launch` (it resumes at the cloud and GitHub phases, asks for the foundation apply, and continues into the first CI/CD run, which waits for your approval on `dev`). From then on the CD workflow keeps the Deploy subtasks in Jira current by itself.
 
+**Fully automatic variant.** Once the owner sets the repository variable `ONBOARD_ANSWERS_TEMPLATE` (the answers above with `<name>` in place of the repository name), the scheduled poller does step 2 for you: every 15 minutes it looks at the organisation's repositories, and a new public repository with a `package.json`, `Dockerfile`, `*.csproj` or similar manifest gets an issue `slipway onboarding` plus the dispatch; a repository without deployable code gets the same issue explaining why not, and is re-checked on its next push. Steps 3 to 5 stay the same.
+
 Details, first-run checks and the exact prompt: `docs/CURSOR-ONBOARDING.md`.
 
 ---

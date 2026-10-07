@@ -16,6 +16,40 @@ Sources, read 2026-09-27: cursor.com/docs/cloud-agent/api/endpoints (`POST https
 | **Monitoring** | the workflow step summary (prompt, agent id and URL), the agent transcript at cursor.com/agents, the PR |
 | **Rollback** | close the PR and delete the branch; nothing was deployed or configured |
 
+## Automatic onboarding: the scheduled poller (1.9.0)
+`.github/workflows/onboard-poller.yml` runs `scripts/onboard-poller.cjs` every 15 minutes (cron `7,22,37,52 * * * *`, off the top of the hour where GitHub delays schedules) and on demand (`gh workflow run onboard-poller.yml -R integranz/slipway -f dry_run=true [-f repository=owner/name]`). It replaces the human who typed the dispatch; nothing else changes: `onboard.yml` still starts the one Cursor Cloud Agent and annotates the pull request.
+
+What one tick does, deterministically and without an LLM, for every repository of the organisation:
+
+| State | Detected by | Action |
+|---|---|---|
+| excluded (the poller's own repository, `ONBOARD_EXCLUDE`), archived, fork, empty default branch | repository metadata, `branches/<default>` | nothing |
+| private | repository metadata | opens the issue `slipway onboarding` once, label `slipway-not-onboarded` (no environment protection on GitHub Free); closes it when the repository becomes public |
+| onboarded | `.slipway/config.yaml` on the default branch | closes the onboarding issue if open; never touches the repository again |
+| onboarding in progress | open issue labelled `slipway-onboarding` | nothing while a PR from `cursor/*` or `slipway/*` is open; otherwise waits 2 hours after the dispatch, re-dispatches once, then labels `needs-human` and stops |
+| not deployable | open issue labelled `slipway-not-deployable` | re-runs the detector only when the default branch head changed; deployable now → relabels and dispatches |
+| new | none of the above | detector on the recursive tree (`*.csproj`, `package.json`, `Dockerfile`, `pyproject.toml`, `requirements.txt`, `go.mod`, `pom.xml`, outside node_modules/vendor/dist/build/bin/obj) → deployable: opens the issue with the rendered answers, dispatches `onboard.yml`, comments the run link; not deployable: opens the issue with the reasons |
+
+Limits and rules: at most `ONBOARD_MAX_DISPATCHES` (default 2) dispatches per tick; one tick at a time; a human who closes the onboarding issue stops the poller for that repository; every write to a target repository is an issue, a comment or a label. The step summary of each tick is the audit trail (repository, action, detail).
+
+Setup (owner, once): the secret `ONBOARD_GITHUB_TOKEN` (already used by the annotation job) and the repository variable `ONBOARD_ANSWERS_TEMPLATE` on `integranz/slipway` with the organisation defaults, `<name>` standing for the repository name (`gh variable set ONBOARD_ANSWERS_TEMPLATE -R integranz/slipway --body "$(cat template.txt)"`). Example:
+```
+azure.location: westeurope
+azure.resource_group: rg-<name>-dev
+azure.acr_name: acr<name>dev
+azure.key_vault_name: kv-<name>-dev
+azure.identity_name: id-<name>-dev
+azure.state.resource_group: rg-<name>-tfstate
+azure.state.storage_account: st<name>tf
+azure.state.container: tfstate
+jira.site_url: https://integranz.atlassian.net
+jira.project_key: DEVOPS
+options.tracker_transport: both
+```
+`<name>` renders as a hyphen slug (`my_app` → `my-app`) except for `azure.acr_name` and `azure.state.storage_account`, where Azure allows letters and digits only (`myapp`). The rendered answers are posted in the onboarding issue. Optional variables: `ONBOARD_MAX_DISPATCHES`, `ONBOARD_EXCLUDE` (comma-separated `owner/name`).
+
+Caveats: latency up to 15 minutes plus GitHub's schedule delays; GitHub disables scheduled workflows in a public repository after 60 days without repository activity (Actions → onboard-poller → Enable workflow); the token must stay valid (fine-grained tokens expire). Dry run read-only against the real organisation on 2026-10-06: `slipway` excluded, `slipway-demo` and `taskflow` onboarded, nothing dispatched.
+
 ## After the merge: Jira without a session
 With `options.tracker_transport: rest` or `both` in the answers, the rendered repository carries `.github/workflows/slipway-tracker.yml`: when the onboarding pull request merges, it finds or creates the delivery story (`Onboard <name> to slipway delivery`) and closes the `Bootstrap <name>` and `Dockerize <app>` subtasks through the plugin's `jira-rest.cjs` (Jira Cloud REST v3, Basic auth). `_cd.yml` then keeps `Deploy <app> <tag> → <env>` current (In Progress at plan time, Done or In Review after apply and smoke), and the story auto-closes when no subtask is open. Credentials: organisation secret `JIRA_API_TOKEN` and variable `JIRA_EMAIL` (`gh secret set JIRA_API_TOKEN --org integranz --visibility all --body "$(pbpaste)"`, `gh variable set JIRA_EMAIL --org integranz --body <email>`, in your terminal). With `both`, the repository also declares the token-based `jira` MCP server (`uvx mcp-atlassian`) in `.cursor/mcp.json` for Cursor sessions; set `JIRA_EMAIL` and `JIRA_API_TOKEN` in the Cloud Agent **Secrets** tab so cloud sessions get Jira tools without a browser login. The onboarding run itself stays `--no-ticket`: the agent holds no Jira credential.
 
@@ -60,6 +94,7 @@ Pick a repository that slipway does **not** deliver yet: on a delivered one (`sl
 - (pending) Docker availability in the cloud VM (drives whether the image claims are verified or UNVERIFIABLE).
 - (pending) The `annotate` job finds the PR URL in the run's `git.branches[].prUrl`, posts the human-steps comment and adds the label (needs `ONBOARD_GITHUB_TOKEN`).
 - (pending) After the merge, `slipway-tracker.yml` creates the story and closes the Bootstrap/Dockerize subtasks (needs the organisation `JIRA_*` credentials and `tracker_transport: rest|both` in the answers).
+- (pending) The poller: a new public repository with a `package.json` or `Dockerfile` gets its `slipway onboarding` issue and a dispatch within one tick; a docs-only repository gets the not-deployable issue; a second tick changes nothing.
 
 ## Proof
 - (pending the owner's first dispatch: date/time UTC, workflow run URL, agent URL, PR URL, the agent's report)
