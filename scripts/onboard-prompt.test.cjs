@@ -17,7 +17,7 @@ test("prompt: pinned version, repository, headless launch, answers inserted verb
   assert.match(p, /--branch v1\.6\.0 https:\/\/github\.com\/integranz\/slipway/);
   assert.match(p, /\/slipway:launch --yes --until bootstrap --no-ticket/);
   assert.match(p, /^  azure\.location: westeurope$/m); assert.match(p, /^  jira\.project_key: DEVOPS$/m);
-  assert.match(p, /Do NOT push and do NOT open a pull request/); assert.match(p, /"slipway: onboard foo"/);
+  assert.match(p, /Do NOT create or switch branches, do NOT push, do NOT open a pull request yourself/); assert.doesNotMatch(p, /git switch -c/); assert.match(p, /"slipway: onboard foo"/);
   assert.match(p, /SLIPWAY_SESSION_ATTENDED=0/); assert.doesNotMatch(p, /\$\{answers\}|\$\{repo\}/, "unexpanded placeholder");
 });
 

@@ -146,6 +146,7 @@ jobs:
               run="$(curl -sS -u "$CURSOR_API_KEY:" "https://api.cursor.com/v1/agents/$AGENT_ID/runs/$run_id")"
               status="$(printf '%s' "$run" | jq -r '.status // empty')"
               pr="$(printf '%s' "$run" | jq -r '[.git.branches[]?.prUrl // empty][0] // empty')"
+              printf '%s' "$run" | jq -r '.result // empty' > result.txt
             fi
             [ -n "$pr" ] || pr="$(printf '%s' "$agent" | jq -r '[.git.branches[]?.prUrl // empty][0] // empty')"
             [ -z "$pr" ] || break
@@ -156,7 +157,32 @@ jobs:
           done
           echo "status=$status" >> "$GITHUB_OUTPUT"; echo "pr=$pr" >> "$GITHUB_OUTPUT"
           echo "agent $AGENT_ID run status: ${status:-unknown}; pull request: ${pr:-none}"
-          { echo; echo "- run status: \`${status:-unknown}\`"; if [ -n "$pr" ]; then echo "- pull request: $pr"; else echo "- pull request: none found (the agent may have stopped with a report only; read the transcript)"; fi; } >> "$GITHUB_STEP_SUMMARY"
+          [ -s result.txt ] || echo "(no final report returned by the run)" > result.txt
+          { echo; echo "- run status: \`${status:-unknown}\`"; if [ -n "$pr" ]; then echo "- pull request: $pr"; else echo "- pull request: none found (the agent stopped with a report only)"; fi
+            echo; echo "<details><summary>Agent report</summary>"; echo; head -c 20000 result.txt; echo; echo "</details>"; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Report on the repository's onboarding issue
+        if: ${{ always() && steps.wait.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.ONBOARD_GITHUB_TOKEN }}
+          PR: ${{ steps.wait.outputs.pr }}
+          STATUS: ${{ steps.wait.outputs.status }}
+          AGENT_ID: ${{ needs.dispatch.outputs.agent_id }}
+          REPOSITORY: ${{ inputs.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          [ -n "$GH_TOKEN" ] || { echo "ONBOARD_GITHUB_TOKEN not set: not reporting on the issue"; exit 0; }
+          # The poller keeps one issue per repository titled "slipway onboarding"; without it (manual dispatch) nothing to do.
+          num="$(gh api "repos/$REPOSITORY/issues?state=open&labels=slipway-onboarding&per_page=20" --jq '[.[] | select(.title == "slipway onboarding")][0].number // empty' 2>/dev/null || true)"
+          [ -n "$num" ] || { echo "no open onboarding issue on $REPOSITORY; report stays in the step summary"; exit 0; }
+          {
+            if [ -n "$PR" ]; then echo "Pull request opened by the agent run https://cursor.com/agents/$AGENT_ID: $PR"
+            else echo "The agent run https://cursor.com/agents/$AGENT_ID ended (\`${STATUS:-unknown}\`) **without a pull request**. Its final report (dispatch $RUN_URL):"; fi
+            echo; echo "<details><summary>Agent report</summary>"; echo; echo '```'; head -c 15000 result.txt; echo; echo '```'; echo "</details>"
+            if [ -z "$PR" ]; then echo; echo "Typical causes: a value the interview needs was neither detected nor in the answers (add it to the organisation template or to this issue and remove the \`needs-human\` label to retry), or the repository has no deployable application yet."; fi
+          } > issue-comment.md
+          gh api -X POST "repos/$REPOSITORY/issues/$num/comments" -f "body=$(cat issue-comment.md)" >/dev/null
+          echo "reported on $REPOSITORY#$num"
       - name: Comment the human steps on the pull request
         if: ${{ steps.wait.outputs.pr != '' }}
         env:
