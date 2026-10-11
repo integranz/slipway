@@ -158,13 +158,38 @@ jobs:
           echo "status=$status" >> "$GITHUB_OUTPUT"; echo "pr=$pr" >> "$GITHUB_OUTPUT"
           echo "agent $AGENT_ID run status: ${status:-unknown}; pull request: ${pr:-none}"
           [ -s result.txt ] || echo "(no final report returned by the run)" > result.txt
+      - name: Find or open the pull request from the agent's branch
+        id: pr
+        if: ${{ always() && steps.wait.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.ONBOARD_GITHUB_TOKEN }}
+          PR: ${{ steps.wait.outputs.pr }}
+          REPOSITORY: ${{ inputs.repository }}
+          REF: ${{ inputs.ref }}
+          AGENT_ID: ${{ needs.dispatch.outputs.agent_id }}
+        run: |
+          set -euo pipefail
+          pr="$PR"
+          if [ -z "$pr" ] && [ -n "$GH_TOKEN" ]; then
+            # The agent opens the PR itself (gh pr create). If it only pushed, or the run's git snapshot lags, look it up by its head branch.
+            pr="$(gh pr list -R "$REPOSITORY" --state open --json url,headRefName --jq '[.[] | select(.headRefName | test("^(cursor|slipway)/"))][0].url // empty' 2>/dev/null || true)"
+            if [ -z "$pr" ]; then
+              branch="$(gh api "repos/$REPOSITORY/branches?per_page=100" --jq '[.[] | select(.name | test("^(cursor|slipway)/")) | .name][0] // empty' 2>/dev/null || true)"
+              if [ -n "$branch" ]; then
+                { echo "## slipway: onboard ${REPOSITORY#*/}"; echo; echo "Opened by the onboarding workflow from the branch the agent pushed (agent https://cursor.com/agents/$AGENT_ID could not open it). The agent's report:"; echo; echo '```'; head -c 15000 result.txt; echo; echo '```'; } > pr-body.md
+                pr="$(gh pr create -R "$REPOSITORY" --head "$branch" --base "$REF" --title "slipway: onboard ${REPOSITORY#*/}" --body-file pr-body.md 2>/dev/null || true)"
+                [ -n "$pr" ] && echo "opened $pr from $branch"
+              fi
+            fi
+          fi
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"; echo "pull request: ${pr:-none}"
           { echo; echo "- run status: \`${status:-unknown}\`"; if [ -n "$pr" ]; then echo "- pull request: $pr"; else echo "- pull request: none found (the agent stopped with a report only)"; fi
             echo; echo "<details><summary>Agent report</summary>"; echo; head -c 20000 result.txt; echo; echo "</details>"; } >> "$GITHUB_STEP_SUMMARY"
       - name: Report on the repository's onboarding issue
         if: ${{ always() && steps.wait.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ secrets.ONBOARD_GITHUB_TOKEN }}
-          PR: ${{ steps.wait.outputs.pr }}
+          PR: ${{ steps.pr.outputs.pr }}
           STATUS: ${{ steps.wait.outputs.status }}
           AGENT_ID: ${{ needs.dispatch.outputs.agent_id }}
           REPOSITORY: ${{ inputs.repository }}
@@ -185,10 +210,10 @@ jobs:
           gh api -X POST "repos/$REPOSITORY/issues/$num/comments" -f "body=$(cat issue-comment.md)" >/dev/null
           echo "reported on $REPOSITORY#$num"
       - name: Comment the human steps on the pull request
-        if: ${{ steps.wait.outputs.pr != '' }}
+        if: ${{ steps.pr.outputs.pr != '' }}
         env:
           GH_TOKEN: ${{ secrets.ONBOARD_GITHUB_TOKEN }}
-          PR: ${{ steps.wait.outputs.pr }}
+          PR: ${{ steps.pr.outputs.pr }}
           AGENT_ID: ${{ needs.dispatch.outputs.agent_id }}
           REPOSITORY: ${{ inputs.repository }}
         run: |
