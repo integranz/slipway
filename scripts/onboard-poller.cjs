@@ -49,6 +49,20 @@ function renderAnswers(template, repoName) {
   }
   return out.join("\n");
 }
+// Per-repository overrides: a fenced block tagged `answers` in the issue body or any comment, `key: value` per line.
+// Blocks are merged in chronological order (later keys win); `at` is the time of the newest block.
+function answersBlocks(issue) {
+  const out = [];
+  const scan = (text, at) => { const re = /```answers[ \t]*\n([\s\S]*?)```/g; let m; while ((m = re.exec(String(text || "")))) out.push({ text: m[1].trim(), at }); };
+  if (!issue) return out;
+  scan(issue.body, issue.created_at || "1970-01-01T00:00:00Z");
+  for (const c of issue.comments || []) scan(c.body, c.created_at || "1970-01-01T00:00:00Z");
+  return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+}
+function latestAnswers(issue) { const blocks = answersBlocks(issue); if (!blocks.length) return null; return { text: blocks.map((b) => b.text).join("\n"), at: blocks[blocks.length - 1].at }; }
+function parseAnswers(text) { const map = new Map(); for (const line of String(text || "").split("\n")) { const m = line.match(/^\s*([A-Za-z0-9_.\[\]]+)\s*:\s*(.*?)\s*$/); if (m && !line.trim().startsWith("#")) map.set(m[1], m[2]); } return map; }
+function mergeAnswers(base, override) { const map = parseAnswers(base); for (const [k, v] of parseAnswers(override)) map.set(k, v); return [...map].map(([k, v]) => `${k}: ${v}`).join("\n"); }
+function runEndedMarkers(issue) { return (issue.comments || []).map((c) => marker(c.body, "run-ended")).filter(Boolean); }
 function marker(text, key) { const m = String(text || "").match(new RegExp(`<!-- slipway:${key}((?: [a-z_]+=[^ >]+)*) -->`)); if (!m) return null; const o = {}; for (const kv of m[1].trim().split(/\s+/).filter(Boolean)) { const [k, v] = kv.split("="); o[k] = v; } return o; }
 function dispatchMarkers(issue) { return (issue.comments || []).map((c) => marker(c.body, "dispatched")).filter(Boolean); }
 function hasLabel(issue, name) { return (issue.labels || []).some((l) => (typeof l === "string" ? l : l.name) === name); }
@@ -63,16 +77,27 @@ function classify(ctx) {
   if (repo.private) return issue && hasLabel(issue, LABELS.notOnboarded.name) ? { action: "skip", reason: "private; already reported" } : { action: "issue-private", reason: "private repository: no environment protection on GitHub Free" };
   if (issue && issue.state === "open" && hasLabel(issue, LABELS.notOnboarded.name)) return { action: "close-issue", reason: "repository is public now; re-evaluating on the next tick" };
   const det = isDeployable(tree);
+  const answers = latestAnswers(issue);
   if (issue && issue.state === "open" && hasLabel(issue, LABELS.onboarding.name)) {
     if (openOnboardingPr) return { action: "skip", reason: `onboarding pull request open: ${openOnboardingPr.url}` };
-    if (hasLabel(issue, LABELS.needsHuman.name)) return { action: "skip", reason: "needs-human" };
-    const ds = dispatchMarkers(issue); const last = ds.length ? Date.parse(ds[ds.length - 1].at || 0) : NaN;
-    if (!ds.length || (now - last) < REDISPATCH_AFTER_MS) return { action: "wait", reason: ds.length ? `dispatched ${Math.round((now - last) / 60000)} min ago, no pull request yet` : "dispatch pending" };
-    if (ds.length >= 2) return { action: "needs-human", reason: "two dispatches without a pull request" };
-    return { action: "redispatch", reason: "no pull request two hours after the dispatch", detector: det };
+    const dsAll = dispatchMarkers(issue); const lastD = dsAll.length ? dsAll[dsAll.length - 1] : null; const lastAt = lastD ? Date.parse(lastD.at || 0) : NaN;
+    // the annotation job reports the end of a run on the issue; dispatches older than the retry window count as ended too
+    // (issues created before the marker existed, or an annotation job that never ran)
+    const ended = !!lastD && (runEndedMarkers(issue).some((m) => Date.parse(m.at || 0) >= lastAt) || (now - lastAt) >= REDISPATCH_AFTER_MS);
+    const sinceAnswers = answers ? dsAll.filter((d) => Date.parse(d.at || 0) > Date.parse(answers.at)) : dsAll; // attempts since the newest answers
+    if (answers && sinceAnswers.length === 0) { // new answers on the issue: retry as soon as the previous run has ended
+      if (!lastD || ended) return { action: "redispatch", reason: `new answers on the issue (${answers.at})`, detector: det, overrides: answers, clearNeedsHuman: hasLabel(issue, LABELS.needsHuman.name) };
+      return { action: "wait", reason: "new answers on the issue; waiting for the current run to end" };
+    }
+    if (hasLabel(issue, LABELS.needsHuman.name)) return { action: "skip", reason: "needs-human (add an ```answers block to the issue to retry)" };
+    if (!dsAll.length || (now - lastAt) < REDISPATCH_AFTER_MS) return { action: "wait", reason: dsAll.length ? `dispatched ${Math.round((now - lastAt) / 60000)} min ago, no pull request yet` : "dispatch pending" };
+    if (sinceAnswers.length >= 2) return { action: "needs-human", reason: "two dispatches without a pull request" };
+    return { action: "redispatch", reason: "no pull request two hours after the dispatch", detector: det, overrides: answers };
   }
   if (issue && issue.state === "open" && hasLabel(issue, LABELS.notDeployable.name)) {
     const m = marker(issue.body, "not-deployable") || {};
+    if (answers && Date.parse(answers.at) > Date.parse(issue.created_at || 0) && !dispatchMarkers(issue).some((d) => Date.parse(d.at || 0) > Date.parse(answers.at)))
+      return { action: "dispatch", reason: `answers on the issue override the detector (${answers.at})`, detector: det, relabel: true, overrides: answers };
     if (m.head === head) return { action: "skip", reason: "not deployable; head unchanged" };
     return det.deployable ? { action: "dispatch", reason: `deployable since ${head.slice(0, 7)}: ${det.found.join(", ")}`, detector: det, relabel: true } : { action: "update-not-deployable", reason: "head changed, still not deployable", detector: det };
   }
@@ -158,24 +183,25 @@ function act(full, repo, ctx, d, env) {
     case "issue-private": { ensureLabels(full, readToken); const i = createIssue(full, readToken, `## slipway onboarding\n\nThis repository is **private**. On the GitHub Free plan a private repository has no environment protection rules, so a deployment workflow would apply without a human approval. slipway does not onboard it as it is.\n\nOptions: make the repository public, or move the organisation to a paid GitHub plan; the poller re-evaluates when the repository becomes public.\n\n<!-- slipway:not-onboarded reason=private -->`, LABELS.notOnboarded.name); return `opened issue #${i.number} (private repository)`; }
     case "issue-not-deployable": { ensureLabels(full, readToken); const i = createIssue(full, readToken, notDeployableBody(repo, ctx.head, d.detector), LABELS.notDeployable.name); return `opened issue #${i.number} (not deployable)`; }
     case "update-not-deployable": comment(full, readToken, n, `Re-checked at \`${head7}\`: still no manifest (looked for ${d.detector.lookedFor.join(", ")}).\n\n<!-- slipway:not-deployable head=${ctx.head} -->`); gh(readToken, ["api", "-X", "PATCH", `repos/${full}/issues/${n}`, "-f", `body=${notDeployableBody(repo, ctx.head, d.detector)}`]); return `updated issue #${n}: head ${head7}, still not deployable`;
-    case "needs-human": setLabels(full, readToken, n, [LABELS.onboarding.name, LABELS.needsHuman.name]); comment(full, readToken, n, "Two dispatches produced no pull request. The poller stops here. Read the agent reports posted above (and the transcripts linked), fix the cause (usually a value the interview needs: add it to the organisation template), then retry by hand with `gh workflow run onboard.yml -R <plugin repo> -f repository=<this repo> -f answers=...`; the poller resumes once a pull request or `.slipway/config.yaml` exists. Close this issue to stop onboarding this repository for good."); return `labelled needs-human on #${n}`;
+    case "needs-human": setLabels(full, readToken, n, [LABELS.onboarding.name, LABELS.needsHuman.name]); comment(full, readToken, n, "Two dispatches produced no pull request. The poller stops here until you add the missing or corrected values: comment on this issue with a fenced block tagged `answers` (one `key: value` per line, for example `apps[0].health_path: /health`); the next tick dispatches again with the template plus your block and removes this label. Close this issue to stop onboarding this repository for good."); return `labelled needs-human on #${n}`;
     case "dispatch": case "redispatch": {
-      const answers = renderAnswers(env.template, repo.name); ensureLabels(full, readToken);
+      const base = renderAnswers(env.template, repo.name); const answers = d.overrides ? mergeAnswers(base, d.overrides.text) : base; ensureLabels(full, readToken);
       let num = n;
       if (!num) { const i = createIssue(full, readToken, onboardingBody(repo, ctx.head, d.detector, answers), LABELS.onboarding.name); num = i.number; }
-      else if (d.relabel) { setLabels(full, readToken, num, [LABELS.onboarding.name]); gh(readToken, ["api", "-X", "PATCH", `repos/${full}/issues/${num}`, "-f", `body=${onboardingBody(repo, ctx.head, d.detector, answers)}`]); }
+      else if (d.relabel || d.clearNeedsHuman) { setLabels(full, readToken, num, [LABELS.onboarding.name]); if (d.relabel) gh(readToken, ["api", "-X", "PATCH", `repos/${full}/issues/${num}`, "-f", `body=${onboardingBody(repo, ctx.head, d.detector, answers)}`]); }
       const url = dispatch(full, repo.default_branch, answers, env);
-      comment(full, readToken, num, `Dispatched onboarding run: ${url}\n\nA Cursor Cloud Agent installs slipway, runs \`/slipway:launch --yes --until bootstrap\` with the answers above and commits; Cursor opens the pull request \`slipway: onboard ${repo.name}\` and the workflow comments the human steps on it.\n\n<!-- slipway:dispatched at=${new Date().toISOString()} run=${url} -->`);
-      return `${d.action} → issue #${num}, run ${url}`;
+      const withWhat = d.overrides ? `the organisation template plus the \`\`\`answers block(s) on this issue` : "the organisation template";
+      comment(full, readToken, num, `Dispatched onboarding run: ${url}\n\nAnswers given to the agent (${withWhat}):\n\n\`\`\`\n${answers}\n\`\`\`\n\nA Cursor Cloud Agent installs slipway, runs \`/slipway:launch --yes --until bootstrap\` with these answers and commits; Cursor opens the pull request \`slipway: onboard ${repo.name}\` and the workflow comments the human steps on it. To change an answer, add a comment with a fenced block tagged \`answers\` (one \`key: value\` per line); the next tick retries with it once the current run has ended.\n\n<!-- slipway:dispatched at=${new Date().toISOString()} run=${url} -->`);
+      return `${d.action} → issue #${num}, run ${url}${d.overrides ? " (with answers from the issue)" : ""}`;
     }
     default: return null;
   }
 }
 function onboardingBody(repo, head, det, answers) {
-  return `## slipway onboarding\n\nDetected on \`${repo.default_branch}\` at \`${(head || "").slice(0, 7)}\`: ${det.found.join(", ")}.\n\nAnswers given to the agent (rendered from the organisation template; no secrets, no ids):\n\n\`\`\`\n${answers}\n\`\`\`\n\nWhat happens next: the dispatch run linked in the comments starts a Cursor Cloud Agent; a pull request \`slipway: onboard ${repo.name}\` follows with the human steps as a comment (merge, \`bash .slipway/setup-azure.sh --apply --set-github-secrets\` in your terminal, then \`/slipway:launch\` on a desktop). This issue closes by itself when \`.slipway/config.yaml\` is on \`${repo.default_branch}\`.\n\n<!-- slipway:state=dispatched head=${head} -->`;
+  return `## slipway onboarding\n\nDetected on \`${repo.default_branch}\` at \`${(head || "").slice(0, 7)}\`: ${det.found.join(", ")}.\n\nAnswers given to the agent (rendered from the organisation template; no secrets, no ids):\n\n\`\`\`\n${answers}\n\`\`\`\n\nWhat happens next: the dispatch run linked in the comments starts a Cursor Cloud Agent; a pull request \`slipway: onboard ${repo.name}\` follows with the human steps as a comment (merge, \`bash .slipway/setup-azure.sh --apply --set-github-secrets\` in your terminal, then \`/slipway:launch\` on a desktop). To override or add a value for this repository, comment with a fenced block tagged \`answers\` (one \`key: value\` per line); it is merged over the template on the next dispatch. This issue closes by itself when \`.slipway/config.yaml\` is on \`${repo.default_branch}\`.\n\n<!-- slipway:state=dispatched head=${head} -->`;
 }
 function notDeployableBody(repo, head, det) {
-  return `## slipway onboarding\n\nNo deployable application found on \`${repo.default_branch}\` at \`${(head || "").slice(0, 7)}\`. The poller looked for: ${det.lookedFor.join(", ")} (outside node_modules, vendor, dist, build, bin, obj).\n\nPush code with one of those manifests and the next tick (every 15 minutes) re-checks this repository. If this repository is not meant to be deployed, close this issue.\n\n<!-- slipway:not-deployable head=${head} -->`;
+  return `## slipway onboarding\n\nNo deployable application found on \`${repo.default_branch}\` at \`${(head || "").slice(0, 7)}\`. The poller looked for: ${det.lookedFor.join(", ")} (outside node_modules, vendor, dist, build, bin, obj).\n\nPush code with one of those manifests and the next tick (every 15 minutes) re-checks this repository. If the detector is wrong, comment with a fenced block tagged \`answers\` (for example \`apps[0].path: .\` and the app's kind, stack, port and health path): the next tick onboards with it. If this repository is not meant to be deployed, close this issue.\n\n<!-- slipway:not-deployable head=${head} -->`;
 }
-module.exports = { classify, isDeployable, renderAnswers, hyphenSlug, alnumSlug, marker, LABELS, ISSUE_TITLE, MANIFESTS };
+module.exports = { classify, isDeployable, renderAnswers, hyphenSlug, alnumSlug, marker, answersBlocks, latestAnswers, mergeAnswers, LABELS, ISSUE_TITLE, MANIFESTS };
 if (require.main === module) main();

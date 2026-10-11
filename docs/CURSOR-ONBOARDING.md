@@ -50,26 +50,40 @@ What one tick does, deterministically and without an LLM, for every repository o
 | private | repository metadata | opens the issue `slipway onboarding` once, label `slipway-not-onboarded` (no environment protection on GitHub Free); closes it when the repository becomes public |
 | onboarded | `.slipway/config.yaml` on the default branch | closes the onboarding issue if open; never touches the repository again |
 | onboarding in progress | open issue labelled `slipway-onboarding` | nothing while a PR from `cursor/*` or `slipway/*` is open; otherwise waits 2 hours after the dispatch, re-dispatches once, then labels `needs-human` and stops |
+| new `answers` block on the issue | fenced block tagged `answers` newer than the last dispatch | dispatches again with template + block as soon as the previous run has ended; removes `needs-human`; on a not-deployable issue the block overrides the detector |
 | not deployable | open issue labelled `slipway-not-deployable` | re-runs the detector only when the default branch head changed; deployable now → relabels and dispatches |
 | new | none of the above | detector on the recursive tree (`*.csproj`, `package.json`, `Dockerfile`, `pyproject.toml`, `requirements.txt`, `go.mod`, `pom.xml`, outside node_modules/vendor/dist/build/bin/obj) → deployable: opens the issue with the rendered answers, dispatches `onboard.yml`, comments the run link; not deployable: opens the issue with the reasons |
 
-Retry after `needs-human`: fix the cause (usually a missing value: add it to the template), then dispatch by hand with `gh workflow run onboard.yml -R <org>/slipway -f repository=<owner>/<name> -f answers="$(cat answers.txt)"`; the poller resumes when a pull request or `.slipway/config.yaml` exists. Closing the issue stops onboarding for that repository. Limits and rules: at most `ONBOARD_MAX_DISPATCHES` (default 2) dispatches per tick; one tick at a time; a human who closes the onboarding issue stops the poller for that repository; every write to a target repository is an issue, a comment or a label. The step summary of each tick is the audit trail (repository, action, detail).
+Retry after `needs-human`: add the missing or corrected values as an `answers` block on the issue (above); the next tick retries. A manual dispatch (`gh workflow run onboard.yml -R <org>/slipway -f repository=<owner>/<name> -f answers="$(cat answers.txt)"`) still works; the poller resumes when a pull request or `.slipway/config.yaml` exists. Closing the issue stops onboarding for that repository. Limits and rules: at most `ONBOARD_MAX_DISPATCHES` (default 2) dispatches per tick; one tick at a time; a human who closes the onboarding issue stops the poller for that repository; every write to a target repository is an issue, a comment or a label. The step summary of each tick is the audit trail (repository, action, detail).
 
-Setup (owner, once): the secret `ONBOARD_GITHUB_TOKEN` (already used by the annotation job) and the repository variable `ONBOARD_ANSWERS_TEMPLATE` on `integranz/slipway` with the organisation defaults, `<name>` standing for the repository name (`gh variable set ONBOARD_ANSWERS_TEMPLATE -R integranz/slipway --body "$(cat template.txt)"`). Example:
+Setup (owner, once): the secret `ONBOARD_GITHUB_TOKEN` (already used by the annotation job) and the repository variable `ONBOARD_ANSWERS_TEMPLATE` on `<org>/slipway` with the organisation defaults, `<name>` standing for the repository name (`gh variable set ONBOARD_ANSWERS_TEMPLATE -R <org>/slipway --body "$(cat template.txt)"`). The template is where the organisation's sharing policy lives: the interview's registry discovery (`az acr list` + role checks) cannot run unattended, so **name the shared registry explicitly** once one exists, and create a registry per repository only while the subscription has none. Example for an organisation that already has one:
 ```
 azure.location: westeurope
+options.registry_scope: existing
+azure.acr_name: <shared registry name>
+azure.acr_resource_group: <its resource group>
 azure.resource_group: rg-<name>-dev
-azure.acr_name: acr<name>dev
 azure.key_vault_name: kv-<name>-dev
 azure.identity_name: id-<name>-dev
-azure.state.resource_group: rg-<name>-tfstate
-azure.state.storage_account: st<name>tf
+azure.state.resource_group: <shared state resource group>
+azure.state.storage_account: <shared state storage account>
 azure.state.container: tfstate
-jira.site_url: https://integranz.atlassian.net
-jira.project_key: DEVOPS
+jira.site_url: https://<site>.atlassian.net
+jira.project_key: <KEY>
 options.tracker_transport: both
 ```
-`<name>` renders as a hyphen slug (`my_app` → `my-app`) except for `azure.acr_name` and `azure.state.storage_account`, where Azure allows letters and digits only (`myapp`). The rendered answers are posted in the onboarding issue. Optional variables: `ONBOARD_MAX_DISPATCHES`, `ONBOARD_EXCLUDE` (comma-separated `owner/name`).
+State storage can be shared too: every state key is prefixed with the project name. `<name>` renders as a hyphen slug (`my_app` → `my-app`) except for `azure.acr_name` and `azure.state.storage_account`, where Azure allows letters and digits only (`myapp`). The rendered answers are posted in the onboarding issue. Optional variables: `ONBOARD_MAX_DISPATCHES`, `ONBOARD_EXCLUDE` (comma-separated `owner/name`).
+
+**Per-repository answers on the issue.** Anything the template cannot know for one repository goes into a comment on its `slipway onboarding` issue, as a fenced block tagged `answers`:
+````
+```answers
+azure.resource_group: rg-taskflow-dev
+apps[0].name: web
+apps[0].health_path: /health
+apps[0].env.TASKFLOW_API_URL: https://<backend host>
+```
+````
+Blocks are merged over the template in chronological order (later keys win) and the final answers are posted with the dispatch. Rules: a block newer than the last dispatch makes the poller dispatch again as soon as the previous run has ended (the annotation job reports the end on the issue) and removes `needs-human`; the two-attempts limit restarts after each new block; on a `slipway-not-deployable` issue a block overrides the detector (give `apps[0].path`, kind, stack, port and health path). A frontend that joins its backend's resource group, as above, gets its own Key Vault, identity, logs and Container Apps environment in that group; only the group, the registry and the state storage are shared.
 
 Caveats: latency up to 15 minutes plus GitHub's schedule delays; GitHub disables scheduled workflows in a public repository after 60 days without repository activity (Actions → onboard-poller → Enable workflow); the token must stay valid (fine-grained tokens expire). Dry run read-only against the real organisation on 2026-10-06: `slipway` excluded, `slipway-demo` and `taskflow` onboarded, nothing dispatched.
 
@@ -77,23 +91,23 @@ Caveats: latency up to 15 minutes plus GitHub's schedule delays; GitHub disables
 With `options.tracker_transport: rest` or `both` in the answers, the rendered repository carries `.github/workflows/slipway-tracker.yml`: when the onboarding pull request merges, it finds or creates the delivery story (`Onboard <name> to slipway delivery`) and closes the `Bootstrap <name>` and `Dockerize <app>` subtasks through the plugin's `jira-rest.cjs` (Jira Cloud REST v3, Basic auth). `_cd.yml` then keeps `Deploy <app> <tag> → <env>` current (In Progress at plan time, Done or In Review after apply and smoke), and the story auto-closes when no subtask is open. Credentials: organisation secret `JIRA_API_TOKEN` and variable `JIRA_EMAIL` (`gh secret set JIRA_API_TOKEN --org integranz --visibility all --body "$(pbpaste)"`, `gh variable set JIRA_EMAIL --org integranz --body <email>`, in your terminal). With `both`, the repository also declares the token-based `jira` MCP server (`uvx mcp-atlassian`) in `.cursor/mcp.json` for Cursor sessions; set `JIRA_EMAIL` and `JIRA_API_TOKEN` in the Cloud Agent **Secrets** tab so cloud sessions get Jira tools without a browser login. The onboarding run itself stays `--no-ticket`: the agent holds no Jira credential.
 
 ## Values the organisation template cannot know
-The template covers organisation-wide names. Some repositories need per-repository values the code does not reveal: a health path when the app has no health route (frontends in particular), environment variables pointing at other systems (`apps[0].env.<NAME>`), a non-default app name. When the agent stops on such a value, its report lands on the onboarding issue; add the values to a per-repository answers file (the issue's answers block plus the missing lines) and retry with a manual dispatch. Better still, give the app a health route that reports its version before onboarding it, because the deployed image must answer it anyway.
+The template covers organisation-wide names. Some repositories need per-repository values the code does not reveal: a health path when the app has no health route (frontends in particular), environment variables pointing at other systems (`apps[0].env.<NAME>`), a non-default app name. When the agent stops on such a value, its report lands on the onboarding issue; answer with a fenced `answers` block in a comment and the poller retries on its next tick (section "Automatic onboarding"). Product-level sharing is the same kind of value: a frontend that should live in its backend's resource group overrides `azure.resource_group` there, while the organisation template carries the shared registry and state storage for everyone. Give the app a health route that reports its version before onboarding it, because the deployed image must answer it anyway.
 
 ## Answers file
 The interview values without a default must be given, one `key: value` per line; the agent treats them as answered. Example:
 ```
 azure.location: westeurope
 azure.resource_group: rg-<name>-dev
-azure.acr_name: acr<name>dev
+options.registry_scope: existing
+azure.acr_name: <shared registry name>
+azure.acr_resource_group: <its resource group>
 azure.key_vault_name: kv-<name>-dev
 azure.identity_name: id-<name>-dev
-azure.state.resource_group: rg-<name>-tfstate
-azure.state.storage_account: st<name>tf
+azure.state.resource_group: <shared state resource group>
+azure.state.storage_account: <shared state storage account>
 azure.state.container: tfstate
-jira.site_url: https://integranz.atlassian.net
-jira.project_key: DEVOPS
-options.registry_scope: existing
-azure.acr_resource_group: rg-shared-dev
+jira.site_url: https://<site>.atlassian.net
+jira.project_key: <KEY>
 options.tracker_transport: both
 ```
 Omit what detections cover (apps, ports, health paths, default branch) and what has a default (`options.*` other than the ones you want to change). No ids, no secrets: the file ends up in the workflow summary and the agent transcript.

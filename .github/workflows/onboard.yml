@@ -179,7 +179,8 @@ jobs:
             if [ -n "$PR" ]; then echo "Pull request opened by the agent run https://cursor.com/agents/$AGENT_ID: $PR"
             else echo "The agent run https://cursor.com/agents/$AGENT_ID ended (\`${STATUS:-unknown}\`) **without a pull request**. Its final report (dispatch $RUN_URL):"; fi
             echo; echo "<details><summary>Agent report</summary>"; echo; echo '```'; head -c 15000 result.txt; echo; echo '```'; echo "</details>"
-            if [ -z "$PR" ]; then echo; echo "Typical causes: a value the interview needs was neither detected nor in the answers (add it to the organisation template or to this issue and remove the \`needs-human\` label to retry), or the repository has no deployable application yet."; fi
+            if [ -z "$PR" ]; then echo; echo "Typical causes: a value the interview needs was neither detected nor in the answers, or the repository has no deployable application yet. To retry with corrected or additional values, comment on this issue with a fenced block tagged \`answers\` (one \`key: value\` per line); the poller dispatches again on its next tick."; fi
+            echo; echo "<!-- slipway:run-ended agent=$AGENT_ID status=${STATUS:-unknown} pr=${PR:-none} at=$(date -u +%Y-%m-%dT%H:%M:%SZ) -->"
           } > issue-comment.md
           gh api -X POST "repos/$REPOSITORY/issues/$num/comments" -f "body=$(cat issue-comment.md)" >/dev/null
           echo "reported on $REPOSITORY#$num"
