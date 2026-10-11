@@ -1,3 +1,9 @@
+## [1.10.0](https://github.com/integranz/slipway/compare/v1.9.1...v1.10.0) (2026-10-11)
+
+### Features
+
+* **onboarding:** per-repository answers blocks on the onboarding issue; template policy for the shared registry ([#31](https://github.com/integranz/slipway/issues/31)) ([4fa3fcf](https://github.com/integranz/slipway/commit/4fa3fcfbdbe17cb13aca5877b17dba65d58e181e))
+
 ## [1.9.1](https://github.com/integranz/slipway/compare/v1.9.0...v1.9.1) (2026-10-11)
 
 ### Bug Fixes
