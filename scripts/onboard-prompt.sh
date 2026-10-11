@@ -3,7 +3,7 @@
 # (docs/CURSOR-ONBOARDING.md). Used by .github/workflows/onboard.yml and by humans who start the agent at
 # cursor.com/agents. The agent installs the plugin at the given version itself (a repository that is not yet
 # delivered by slipway has no .cursor/environment.json), runs `/slipway:launch --yes --until bootstrap` and commits on a
-# branch; Cursor pushes the branch and opens the pull request. No credential is needed or given to the agent.
+# branch, pushes it and opens the pull request itself (gh is authenticated in the cloud VM). No cloud credential is given to the agent.
 # Usage: onboard-prompt.sh <owner/repo> [--ref <branch>] [--version <plugin version>] [--answers <file>]
 #   --ref      branch the agent starts from (default main)
 #   --version  slipway version to install (default: this checkout's plugins/slipway/.claude-plugin/plugin.json)
@@ -64,10 +64,18 @@ Rules for this run:
   asking (\`--yes\`); it lands in the pull request. Build it only if \`docker version\` works; otherwise mark the image
   claims UNVERIFIABLE and say so.
 - If the repository holds no deployable application, write nothing and report why.
-- Commit on the branch you are already on (Cursor created it and pushes it when you finish): one commit titled
-  "slipway: onboard ${name}". Do NOT create or switch branches, do NOT push, do NOT open a pull request yourself.
-- If you cannot produce the files (missing values, no deployable application, a failing step), do NOT commit anything:
-  end with the report; it is read from the run and posted on the repository's onboarding issue.
+- Commit on the branch you are already on (Cursor created it for this run; never create or switch branches): one commit
+  titled "slipway: onboard ${name}". Then publish it yourself: \`git push -u origin HEAD\`, and open the pull request with
+  \`gh pr create --base ${ref} --title "slipway: onboard ${name}" --body-file /tmp/pr-body.md\` (ready for review, not a
+  draft; if a Cursor tool opens it as a draft, mark it ready). The body has three
+  sections: "What this pull request contains" (the app(s): kind, stack, port, health path; the files written),
+  "Human steps before the first deployment" (1. review and merge; 2. in your own terminal from the repository root:
+  \`bash .slipway/setup-azure.sh --apply --set-github-secrets\`; 3. \`/slipway:launch\` in Claude Code or Cursor on a desktop
+  for the remaining phases; then the secret values listed in .slipway/SETUP.md), and "Agent report" (your launch output).
+  Never push to \`${ref}\` itself, never force-push, never merge. If \`gh pr create\` fails, say so in the report: the
+  branch is pushed and the onboarding workflow opens the pull request from it.
+- If you cannot produce the files (missing values, no deployable application, a failing step), do NOT commit or push
+  anything: end with the report; it is read from the run and posted on the repository's onboarding issue.
 - Never write a secret, a token, a subscription or tenant id into a file or a message.
 
 End with a report: apps found (kind, stack, port, health path, evidence), files written, the human steps that remain
