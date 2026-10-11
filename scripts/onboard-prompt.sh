@@ -3,7 +3,7 @@
 # (docs/CURSOR-ONBOARDING.md). Used by .github/workflows/onboard.yml and by humans who start the agent at
 # cursor.com/agents. The agent installs the plugin at the given version itself (a repository that is not yet
 # delivered by slipway has no .cursor/environment.json), runs `/slipway:launch --yes --until bootstrap` and commits on a
-# branch; Cursor pushes the branch and opens the pull request. No credential is needed or given to the agent.
+# branch, pushes it and opens the pull request itself (gh is authenticated in the cloud VM). No cloud credential is given to the agent.
 # Usage: onboard-prompt.sh <owner/repo> [--ref <branch>] [--version <plugin version>] [--answers <file>]
 #   --ref      branch the agent starts from (default main)
 #   --version  slipway version to install (default: this checkout's plugins/slipway/.claude-plugin/plugin.json)
