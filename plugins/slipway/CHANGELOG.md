@@ -1,3 +1,9 @@
+## [1.10.1](https://github.com/integranz/slipway/compare/v1.10.0...v1.10.1) (2026-10-11)
+
+### Bug Fixes
+
+* **onboarding:** the agent pushes its branch and opens the pull request; workflow fallback from the pushed branch ([#32](https://github.com/integranz/slipway/issues/32)) ([fc8147a](https://github.com/integranz/slipway/commit/fc8147afde4e4bc122fb317e9e0e47ea5137c1d0)), closes [taskflow-app#4](https://github.com/integranz/taskflow-app/issues/4)
+
 ## [1.10.0](https://github.com/integranz/slipway/compare/v1.9.1...v1.10.0) (2026-10-11)
 
 ### Features
