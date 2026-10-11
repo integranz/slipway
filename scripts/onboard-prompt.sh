@@ -64,8 +64,10 @@ Rules for this run:
   asking (\`--yes\`); it lands in the pull request. Build it only if \`docker version\` works; otherwise mark the image
   claims UNVERIFIABLE and say so.
 - If the repository holds no deployable application, write nothing and report why.
-- Commit your changes on a new branch: \`git switch -c slipway/onboard\`, one commit titled "slipway: onboard ${name}".
-  Do NOT push and do NOT open a pull request: Cursor pushes the branch and opens the pull request when you finish.
+- Commit on the branch you are already on (Cursor created it and pushes it when you finish): one commit titled
+  "slipway: onboard ${name}". Do NOT create or switch branches, do NOT push, do NOT open a pull request yourself.
+- If you cannot produce the files (missing values, no deployable application, a failing step), do NOT commit anything:
+  end with the report; it is read from the run and posted on the repository's onboarding issue.
 - Never write a secret, a token, a subscription or tenant id into a file or a message.
 
 End with a report: apps found (kind, stack, port, health path, evidence), files written, the human steps that remain
