@@ -56,6 +56,39 @@ test("classifier: in-progress onboarding waits, re-dispatches once after two hou
   assert.equal(P.classify(base({ issue: issue([P.LABELS.onboarding.name], { state: "closed" }) })).action, "skip", "a human closed it: never re-dispatch");
 });
 
+test("answers blocks on the issue: parsed in order, merged over the template, newest time wins", () => {
+  const iss = { body: "intro\n```answers\nazure.resource_group: rg-taskflow-dev\n```", created_at: "2026-10-07T21:23:00Z",
+    comments: [{ body: "no block here", created_at: "2026-10-08T01:00:00Z" }, { body: "fix:\n```answers\napps[0].health_path: /health\n# comment\nazure.resource_group: rg-shared-dev\n```", created_at: "2026-10-11T09:00:00Z" }] };
+  const a = P.latestAnswers(iss); assert.equal(a.at, "2026-10-11T09:00:00Z"); assert.equal(P.answersBlocks(iss).length, 2);
+  const merged = P.mergeAnswers("azure.location: westeurope\nazure.resource_group: rg-widgets-dev\nazure.acr_name: acrshared", a.text);
+  assert.equal(merged, "azure.location: westeurope\nazure.resource_group: rg-shared-dev\nazure.acr_name: acrshared\napps[0].health_path: /health");
+  assert.equal(P.latestAnswers({ body: "none", comments: [] }), null);
+});
+
+test("classifier: answers on the issue retry the onboarding without a manual dispatch", () => {
+  const open = (comments, extra = []) => issue([P.LABELS.onboarding.name, ...extra], { comments, created_at: "2026-10-07T21:23:00Z" });
+  const ended = (iso) => ({ body: `report\n\n<!-- slipway:run-ended agent=bc-1 status=FINISHED pr=none at=${iso} -->`, created_at: iso });
+  const answers = (iso) => ({ body: "```answers\napps[0].health_path: /health\n```", created_at: iso });
+  // needs-human, then new answers after the last run ended → redispatch with the overrides and clear the label
+  const r = P.classify(base({ issue: open([dispatchedAt("2026-10-07T21:23:04Z"), ended("2026-10-07T21:31:00Z"), dispatchedAt("2026-10-08T01:16:12Z"), ended("2026-10-08T01:24:00Z"), answers("2026-10-11T09:00:00Z")], [P.LABELS.needsHuman.name]) }));
+  assert.equal(r.action, "redispatch"); assert.equal(r.clearNeedsHuman, true); assert.match(r.overrides.text, /health_path/);
+  // no run-ended marker (issue older than the marker) but the last dispatch is more than two hours old → counts as ended
+  const legacy = P.classify(base({ issue: open([dispatchedAt("2026-10-05T21:23:04Z"), dispatchedAt("2026-10-06T01:16:12Z"), answers("2026-10-06T09:00:00Z")], [P.LABELS.needsHuman.name]) }));
+  assert.equal(legacy.action, "redispatch"); assert.equal(legacy.clearNeedsHuman, true);
+  // new answers while the last run has not reported its end → wait
+  assert.equal(P.classify(base({ issue: open([dispatchedAt("2026-10-06T11:50:00Z"), answers("2026-10-06T11:55:00Z")]) })).action, "wait");
+  // answers older than the last dispatch count as consumed: normal rules apply (needs-human after two attempts)
+  assert.equal(P.classify(base({ issue: open([answers("2026-10-06T06:00:00Z"), dispatchedAt("2026-10-06T07:00:00Z"), dispatchedAt("2026-10-06T09:00:00Z")]) })).action, "needs-human");
+  // needs-human without new answers stays put
+  assert.equal(P.classify(base({ issue: open([dispatchedAt("2026-10-06T07:00:00Z")], [P.LABELS.needsHuman.name]) })).action, "skip");
+  // not-deployable issue + answers → the human overrides the detector
+  const nd = P.classify(base({ tree: ["README.md"], issue: issue([P.LABELS.notDeployable.name], { body: "<!-- slipway:not-deployable head=abcdef1234567890 -->", created_at: "2026-10-01T00:00:00Z", comments: [answers("2026-10-02T00:00:00Z")] }) }));
+  assert.equal(nd.action, "dispatch"); assert.equal(nd.relabel, true); assert.ok(nd.overrides);
+  // once dispatched after those answers, the not-deployable override is consumed (the issue is relabelled onboarding by then anyway)
+  const consumed = P.classify(base({ tree: ["README.md"], issue: issue([P.LABELS.notDeployable.name], { body: "<!-- slipway:not-deployable head=abcdef1234567890 -->", created_at: "2026-10-01T00:00:00Z", comments: [answers("2026-10-02T00:00:00Z"), dispatchedAt("2026-10-02T01:00:00Z")] }) }));
+  assert.equal(consumed.action, "skip");
+});
+
 test("onboard-poller.yml: schedule off the hour, dispatch permission, concurrency, no input interpolation in run blocks", () => {
   const wf = yaml.load(fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "onboard-poller.yml"), "utf8"));
   assert.equal(wf.on.schedule[0].cron, "7,22,37,52 * * * *"); assert.deepEqual(Object.keys(wf.on.workflow_dispatch.inputs).sort(), ["dry_run", "repository"]);

@@ -44,6 +44,6 @@ test("onboard.yml: dispatch inputs, no input interpolation inside run blocks, AP
   const annotate = wf.jobs.annotate; assert.ok(annotate, "annotate job"); assert.equal(annotate.needs, "dispatch"); assert.match(annotate.if, /needs\.dispatch\.outputs\.agent_id/);
   const aruns = annotate.steps.filter((s) => s.run).map((s) => s.run).join("\n");
   assert.equal((aruns.match(/\$\{\{\s*inputs\./g) || []).length, 0, "annotate inputs must come through env");
-  assert.match(aruns, /\/v1\/agents\/\$AGENT_ID\/runs\//); assert.match(aruns, /prUrl/); assert.match(aruns, /setup-azure\.sh --apply --set-github-secrets/); assert.match(aruns, /gh pr comment "\$PR" --body-file comment\.md/);
+  assert.match(aruns, /\/v1\/agents\/\$AGENT_ID\/runs\//); assert.match(aruns, /prUrl/); assert.match(aruns, /slipway:run-ended agent=\$AGENT_ID/); assert.match(aruns, /\.result \/\/ empty/); assert.match(aruns, /setup-azure\.sh --apply --set-github-secrets/); assert.match(aruns, /gh pr comment "\$PR" --body-file comment\.md/);
   const comment = annotate.steps.find((s) => s.name === "Comment the human steps on the pull request"); assert.ok(comment.env.GH_TOKEN.includes("secrets.ONBOARD_GITHUB_TOKEN"));
 });
