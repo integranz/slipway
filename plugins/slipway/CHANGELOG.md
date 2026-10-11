@@ -1,3 +1,9 @@
+## [1.9.1](https://github.com/integranz/slipway/compare/v1.9.0...v1.9.1) (2026-10-11)
+
+### Bug Fixes
+
+* **onboarding:** agent commits on its current branch; the run's report lands on the onboarding issue ([#30](https://github.com/integranz/slipway/issues/30)) ([d883774](https://github.com/integranz/slipway/commit/d883774ed374ba67cb84ab28ae742ef1c2843a6c))
+
 ## [1.9.0](https://github.com/integranz/slipway/compare/v1.8.0...v1.9.0) (2026-10-07)
 
 ### Features
