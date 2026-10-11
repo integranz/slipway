@@ -66,7 +66,8 @@ Rules for this run:
 - If the repository holds no deployable application, write nothing and report why.
 - Commit on the branch you are already on (Cursor created it for this run; never create or switch branches): one commit
   titled "slipway: onboard ${name}". Then publish it yourself: \`git push -u origin HEAD\`, and open the pull request with
-  \`gh pr create --base ${ref} --title "slipway: onboard ${name}" --body-file /tmp/pr-body.md\`. The body has three
+  \`gh pr create --base ${ref} --title "slipway: onboard ${name}" --body-file /tmp/pr-body.md\` (ready for review, not a
+  draft; if a Cursor tool opens it as a draft, mark it ready). The body has three
   sections: "What this pull request contains" (the app(s): kind, stack, port, health path; the files written),
   "Human steps before the first deployment" (1. review and merge; 2. in your own terminal from the repository root:
   \`bash .slipway/setup-azure.sh --apply --set-github-secrets\`; 3. \`/slipway:launch\` in Claude Code or Cursor on a desktop
