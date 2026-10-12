@@ -78,6 +78,20 @@ test("subtask start then done: no duplicate subtask; the story stays open while 
   const r2 = await run(repo, ["subtask", "done", "Dockerize api"]); assert.match(r2.stdout, /story closed \(Done\)/); assert.equal(state.issues.get("T-1").status, "Done");
 });
 
+test("tracker sequence: one story for the whole run (--story + --no-autoclose + story autoclose), never a second story", async () => {
+  state.issues.clear(); state.n = 0; const repo = mkRepo();
+  const e = await run(repo, ["story", "ensure", "--json"]); assert.equal(e.status, 0, e.stderr); const key = JSON.parse(e.stdout).key; assert.equal(key, "T-1");
+  const a = await run(repo, ["--story", key, "subtask", "done", "Bootstrap adlc-demo", "--no-autoclose"]); assert.equal(a.status, 0, a.stdout + a.stderr); assert.doesNotMatch(a.stdout, /story closed/);
+  assert.equal(state.issues.get("T-1").status, "To Do", "story untouched by --no-autoclose");
+  const b = await run(repo, ["--story", key, "subtask", "done", "Dockerize api", "--no-autoclose"]); assert.equal(b.status, 0, b.stderr);
+  const c = await run(repo, ["--story", key, "story", "autoclose"]); assert.equal(c.status, 0, c.stderr); assert.match(c.stdout, /story closed T-1 \(Done\)/);
+  assert.equal([...state.issues.values()].filter((i) => i.type === "Story").length, 1, "exactly one story");
+  assert.deepEqual([...state.issues.values()].filter((i) => i.type === "Subtask").map((i) => i.parent), ["T-1", "T-1"]);
+  // without --story, the lookup by title ignores the closed story and creates a new one: that is why the workflow passes the key
+  const d = await run(repo, ["subtask", "done", "Dockerize web"]); assert.equal(d.status, 0, d.stderr);
+  assert.equal([...state.issues.values()].filter((i) => i.type === "Story").length, 2);
+});
+
 test("story ensure honours jira.story_key; comment posts; --json output", async () => {
   state.issues.clear(); state.n = 0; state.issues.set("DEV-9", { key: "DEV-9", summary: "Existing story", status: "In Progress", type: "Story", comments: [] });
   const repo = mkRepo((c) => { c.jira.story_key = "DEV-9"; });

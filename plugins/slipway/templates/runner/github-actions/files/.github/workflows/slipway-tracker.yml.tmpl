@@ -35,7 +35,12 @@ jobs:
         run: |
           set -euo pipefail
           J="node .slipway-plugin/plugins/slipway/scripts/jira-rest.cjs --repo . --soft"
-          $J story ensure --title "<% derived.tracking.story_title %>"
-          $J subtask done "Bootstrap <% project.name %>" --message "Onboarding pull request merged by $MERGED_BY: $PR_URL"
-<%#each derived.apps%>          $J subtask done "Dockerize <% name %>" --message "Dockerfile and pipelines of <% name %> merged in $PR_URL"
-<%/each%><%/if%>
+          # One story for the whole run: resolve its key once and pass it to every call, so closing the first subtask
+          # never makes the next call create a second story (the lookup by title ignores closed stories).
+          KEY="$($J story ensure --title "<% derived.tracking.story_title %>" --json | jq -r '.key // empty')"
+          [ -n "$KEY" ] || { echo "tracking: no story key (tracker unconfigured or unreachable); nothing to update"; exit 0; }
+          S="$J --story $KEY"
+          $S subtask done "Bootstrap <% project.name %>" --no-autoclose --message "Onboarding pull request merged by $MERGED_BY: $PR_URL"
+<%#each derived.apps%>          $S subtask done "Dockerize <% name %>" --no-autoclose --message "Dockerfile and pipelines of <% name %> merged in $PR_URL"
+<%/each%>          $S story autoclose
+<%/if%>

@@ -424,7 +424,8 @@ test("tracker_transport: mcp (default) renders no tracker workflow, no Jira step
   const wf = read(rest, ".github/workflows/slipway-tracker.yml"); const version = require("./lib/config.cjs").pluginVersion();
   assert.match(wf, /types: \[closed\]/); assert.match(wf, /startsWith\(github\.event\.pull_request\.head\.ref, 'slipway\/'\)/);
   assert.ok(wf.includes(`ref: v${version}`), "plugin checked out at the rendering version"); assert.match(wf, /story ensure --title "Onboard adlc-demo to slipway delivery"/);
-  assert.match(wf, /subtask done "Bootstrap adlc-demo"/); assert.match(wf, /subtask done "Dockerize api"/); assert.match(wf, /subtask done "Dockerize web"/);
+  assert.match(wf, /KEY="\$\(\$J story ensure --title "Onboard adlc-demo to slipway delivery" --json \| jq -r '\.key \/\/ empty'\)"/); assert.match(wf, /S="\$J --story \$KEY"/);
+  assert.match(wf, /\$S subtask done "Bootstrap adlc-demo" --no-autoclose/); assert.match(wf, /\$S subtask done "Dockerize api" --no-autoclose/); assert.match(wf, /\$S subtask done "Dockerize web" --no-autoclose/); assert.match(wf, /\$S story autoclose/);
   assert.match(wf, /JIRA_API_TOKEN: \$\{\{ secrets\.JIRA_API_TOKEN \}\}/); assert.match(wf, /JIRA_EMAIL: \$\{\{ vars\.JIRA_EMAIL \}\}/); assert.doesNotMatch(wf, /<%/);
   const cd = read(rest, ".github/workflows/_cd.yml");
   assert.match(cd, /subtask start "Deploy \$\{\{ inputs\.app \}\} \$\{\{ inputs\.tag \}\} → \$\{\{ inputs\.environment \}\}"/); assert.match(cd, /subtask done "\$T" --message "Applied and smoke-tested/); assert.match(cd, /subtask review "\$T"/); assert.match(cd, /id: smoke/);
