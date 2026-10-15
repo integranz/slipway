@@ -9,7 +9,10 @@
 // usage: node jira-rest.cjs [--repo <dir>] [--soft] [--json] <command>
 //   story ensure [--title "<t>"] [--epic <KEY>]                          find (jira.story_key, then by title) or create; prints the key
 //   story done [--story <KEY>] [--message "<m>"]                          close the story
-//   subtask start|review|done "<title>" [--story <KEY>] [--message "<m>"] [--evidence <file|url>]
+//   story autoclose [--story <KEY>]                                       close the story when no subtask is open (else say what is)
+//   subtask start|review|done "<title>" [--story <KEY>] [--message "<m>"] [--evidence <file|url>] [--no-autoclose]
+//     `done` auto-closes the story when nothing else is open; pass --no-autoclose when more subtasks follow in the same run
+//     and finish with `story autoclose` (the generated slipway-tracker.yml does), so a story is never closed and re-created.
 //   comment <KEY> --message "<m>" [--evidence <file|url>]
 // env: JIRA_EMAIL and JIRA_API_TOKEN (required); JIRA_SITE_URL overrides jira.site_url. Never printed.
 // exit: 0 done; 3 tracker off/unconfigured (0 with --soft, tracking never blocks delivery); 1 error (0 with --soft).
@@ -21,7 +24,7 @@ const argv = process.argv.slice(2);
 const flags = {}; const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === "--soft" || a === "--json") { flags[a.slice(2)] = true; continue; }
+  if (a === "--soft" || a === "--json" || a === "--no-autoclose") { flags[a.slice(2)] = true; continue; }
   if (a.startsWith("--")) { flags[a.slice(2)] = argv[i + 1]; i++; continue; }
   positional.push(a);
 }
@@ -115,17 +118,22 @@ const fmt = (i) => `${i.key} "${i.fields.summary}" → ${i.fields.status ? i.fie
     out(`tracking: story ${created ? "created" : "found"} ${fmt(issue)} (jira-rest)`, { key: issue.key, created, status: issue.fields.status.name, summary: issue.fields.summary });
     return;
   }
+  if (group === "story" && action === "autoclose") {
+    const { issue } = await ensureStory(); const r = await autoClose(issue.key);
+    out(r.closed ? `tracking: story closed ${issue.key} (${r.status}) (jira-rest)` : `tracking: story ${issue.key} stays open (${r.open} subtask(s) open) (jira-rest)`, { key: issue.key, closed: r.closed, open: r.open || 0 });
+    return;
+  }
   if (group === "story" && action === "done") {
     const { issue } = await ensureStory(); await comment(issue.key, messageText("")); const s = await transitionTo(issue.key, transitions.done);
     out(`tracking: story done ${fmt(s)} (jira-rest)`, { key: s.key, status: s.fields.status.name }); return;
   }
   if (group === "subtask") {
-    if (!["start", "review", "done"].includes(action) || !rest[0]) stop(2, "usage: jira-rest.cjs subtask start|review|done \"<title>\" [--story KEY] [--message ..] [--evidence <file|url>]");
+    if (!["start", "review", "done"].includes(action) || !rest[0]) stop(2, "usage: jira-rest.cjs subtask start|review|done \"<title>\" [--story KEY] [--message ..] [--evidence <file|url>] [--no-autoclose]");
     const title = rest[0]; const { issue: story } = await ensureStory();
     const { issue: sub, created } = await ensureSubtask(story.key, title);
     await comment(sub.key, messageText(""));
     const s = await transitionTo(sub.key, transitions[action]);
-    let closed = null; if (action === "done") closed = await autoClose(story.key);
+    let closed = null; if (action === "done" && !flags["no-autoclose"]) closed = await autoClose(story.key);
     out(`tracking: subtask ${action} ${fmt(s)}${created ? " (created)" : ""} under ${story.key}${closed && closed.closed ? `; story closed (${closed.status})` : ""} (jira-rest)`,
       { story: story.key, key: s.key, created, status: s.fields.status.name, story_closed: !!(closed && closed.closed) });
     return;

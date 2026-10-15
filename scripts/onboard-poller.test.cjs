@@ -92,6 +92,7 @@ test("classifier: answers on the issue retry the onboarding without a manual dis
 test("onboard-poller.yml: schedule off the hour, dispatch permission, concurrency, no input interpolation in run blocks", () => {
   const wf = yaml.load(fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "onboard-poller.yml"), "utf8"));
   assert.equal(wf.on.schedule[0].cron, "7,22,37,52 * * * *"); assert.deepEqual(Object.keys(wf.on.workflow_dispatch.inputs).sort(), ["dry_run", "repository"]);
+  assert.deepEqual(wf.on.workflow_run, { workflows: ["onboard"], types: ["completed"] }, "a tick follows every onboarding run");
   assert.equal(wf.permissions.actions, "write"); assert.equal(wf.permissions.contents, "read"); assert.equal(wf.concurrency.group, "onboard-poller");
   const runs = wf.jobs.tick.steps.filter((s) => s.run).map((s) => s.run).join("\n");
   assert.equal((runs.match(/\$\{\{\s*inputs\./g) || []).length, 0); assert.match(runs, /onboard-poller\.cjs/);
