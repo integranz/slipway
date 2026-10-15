@@ -1,3 +1,9 @@
+## [1.10.2](https://github.com/integranz/slipway/compare/v1.10.1...v1.10.2) (2026-10-15)
+
+### Bug Fixes
+
+* **tracker:** one story per tracker run (--story carried through, --no-autoclose, story autoclose) ([#34](https://github.com/integranz/slipway/issues/34)) ([e970137](https://github.com/integranz/slipway/commit/e9701371a47eb41819814f38342fd566198fa5e0))
+
 ## [1.10.1](https://github.com/integranz/slipway/compare/v1.10.0...v1.10.1) (2026-10-11)
 
 ### Bug Fixes
