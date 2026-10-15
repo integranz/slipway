@@ -9,7 +9,10 @@
 name: onboard-poller
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "7,22,37,52 * * * *"   # GitHub runs schedules on a best-effort basis: observed gaps of hours on this repository
+  workflow_run:
+    workflows: [onboard]           # a tick right after every onboarding run, so issues advance without waiting for a schedule
+    types: [completed]
   workflow_dispatch:
     inputs:
       dry_run:
