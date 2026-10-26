@@ -74,7 +74,8 @@ say "4. Federated credentials (issuer $ISSUER, audience $AUDIENCE, api-version $
 # GitHub sends either the classic subject  repo:<org>/<repo>:...  or, with immutable subject claims, repo:<org>@<org-id>/<repo>@<repo-id>:...
 # A flexible credential matches `sub` with wildcards and must also pin an immutable claim: repository_owner_id = the organisation id.
 fic() { # name expression
-  local name="$1" expr="$2" url="https://management.azure.com${UAMI_RES}/federatedIdentityCredentials/${name}?api-version=${FIC_API}" body
+  local name="$1" expr="$2" url body
+  url="https://management.azure.com${UAMI_RES}/federatedIdentityCredentials/${name}?api-version=${FIC_API}"
   body="$(mktemp)"; python3 - "$expr" "$ISSUER" "$AUDIENCE" > "$body" <<'PY'
 import json, sys
 print(json.dumps({"properties": {"issuer": sys.argv[2], "audiences": [sys.argv[3]], "claimsMatchingExpression": {"value": sys.argv[1], "languageVersion": 1}}}))

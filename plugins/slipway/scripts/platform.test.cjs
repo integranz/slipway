@@ -39,6 +39,32 @@ test("renders the platform repository: foundation, setup script, organisation te
   tfCheck(path.join(dir, "infra", "foundation"));
 });
 
+test("setup-platform.sh dry run walks every step against a stubbed az (nothing exists yet)", () => {
+  const { dir, r } = renderWith(); assert.equal(r.status, 0, r.stderr + r.stdout);
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "stub-az-")); // az: identity and account queries answer, every "show"/GET of a resource says "not found"
+  fs.writeFileSync(path.join(bin, "az"), `#!/usr/bin/env bash
+args="$*"
+case "$args" in
+  "account show --query id"*) echo 00000000-0000-0000-0000-000000000001;;
+  "account show --query tenantId"*) echo 00000000-0000-0000-0000-000000000002;;
+  "account show --query name"*) echo "Stub subscription";;
+  "ad signed-in-user show --query id"*) echo 00000000-0000-0000-0000-000000000003;;
+  "ad signed-in-user show --query userPrincipalName"*) echo me@example.com;;
+  "role assignment list"*"--scope"*) echo 0;;
+  "role assignment list"*) printf 'Owner\\n';;
+  "role definition list"*) echo "";;
+  "group show"*|"storage account show"*|"identity show"*|"rest --method GET"*|"storage container show"*|"acr show"*|"keyvault show"*) exit 1;;
+  *) exit 0;;
+esac
+`); fs.chmodSync(path.join(bin, "az"), 0o755);
+  const run = spawnSync("bash", ["setup-platform.sh"], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+  for (const s of ["create resource group rg-slipway-tfstate", "create storage account stslipwaytf", "create identity id-slipway-cicd-dev", "add github-ci-immutable", "add github-cd-immutable", "add github-ci-classic", "add github-cd-classic", "cicd identity: Contributor on resourceGroups/rg-slipway-dev", "create container tfstate", "--grant-per-app-roles"]) assert.ok(run.stdout.includes(s), `dry run mentions '${s}'`);
+  assert.match(run.stdout, /claims\['sub'\] matches 'repo:integranz@326982263\/\*:ref:refs\/heads\/main' and claims\['repository_owner_id'\] eq '326982263'/);
+  assert.doesNotMatch(run.stdout + run.stderr, /unbound variable|command not found/);
+  assert.match(run.stdout, /Done \(dry run\)/);
+});
+
 test("existing registry and shared apps identity variants; re-render skips existing files unless --force", () => {
   const { dir, r } = renderWith((c) => { c.azure.registry.existing = true; c.azure.registry.resource_group = "rg-taskflow-dev"; c.azure.registry.name = "acrtaskflowdev"; c.azure.shared_apps_identity = true; delete c.jira; });
   assert.equal(r.status, 0, r.stderr + r.stdout);
