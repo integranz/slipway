@@ -89,6 +89,16 @@ test("classifier: answers on the issue retry the onboarding without a manual dis
   assert.equal(consumed.action, "skip");
 });
 
+test("GitHub gates at dispatch: environment body, pull-request-only ruleset, plan from what exists, environment name from the answers", () => {
+  assert.deepEqual(P.environmentBody([7, 9]), { reviewers: [{ type: "User", id: 7 }, { type: "User", id: 9 }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } });
+  const rs = P.prOnlyRuleset("main"); assert.equal(rs.name, "main: pull requests (slipway)"); assert.equal(rs.enforcement, "active");
+  assert.deepEqual(rs.rules.map((r) => r.type), ["deletion", "non_fast_forward", "pull_request"]); assert.ok(!rs.rules.some((r) => r.type === "required_status_checks"), "no required checks before the apps are known");
+  assert.deepEqual(P.gatesPlan({ envJson: null, rulesJson: [] }), { createEnv: true, createRuleset: true });
+  assert.deepEqual(P.gatesPlan({ envJson: { protection_rules: [] }, rulesJson: [{ type: "deletion" }] }), { createEnv: true, createRuleset: true }, "an unprotected environment counts as missing");
+  assert.deepEqual(P.gatesPlan({ envJson: { protection_rules: [{ type: "required_reviewers" }] }, rulesJson: [{ type: "pull_request" }] }), { createEnv: false, createRuleset: false });
+  assert.equal(P.environmentName("azure.location: x\ngithub.cd_environment: staging"), "staging"); assert.equal(P.environmentName("azure.location: x"), "dev");
+});
+
 test("onboard-poller.yml: schedule off the hour, dispatch permission, concurrency, no input interpolation in run blocks", () => {
   const wf = yaml.load(fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "onboard-poller.yml"), "utf8"));
   assert.equal(wf.on.schedule[0].cron, "7,22,37,52 * * * *"); assert.deepEqual(Object.keys(wf.on.workflow_dispatch.inputs).sort(), ["dry_run", "repository"]);
@@ -97,5 +107,5 @@ test("onboard-poller.yml: schedule off the hour, dispatch permission, concurrenc
   const runs = wf.jobs.tick.steps.filter((s) => s.run).map((s) => s.run).join("\n");
   assert.equal((runs.match(/\$\{\{\s*inputs\./g) || []).length, 0); assert.match(runs, /onboard-poller\.cjs/);
   const step = wf.jobs.tick.steps.find((s) => s.name === "Poll the organisation");
-  assert.ok(step.env.ONBOARD_GITHUB_TOKEN.includes("secrets.ONBOARD_GITHUB_TOKEN")); assert.ok(step.env.ONBOARD_ANSWERS_TEMPLATE.includes("vars.ONBOARD_ANSWERS_TEMPLATE")); assert.ok(step.env.GITHUB_TOKEN.includes("github.token"));
+  assert.ok(step.env.ONBOARD_GITHUB_TOKEN.includes("secrets.ONBOARD_GITHUB_TOKEN")); assert.ok(step.env.ONBOARD_ANSWERS_TEMPLATE.includes("vars.ONBOARD_ANSWERS_TEMPLATE")); assert.ok(step.env.GITHUB_TOKEN.includes("github.token")); assert.ok(step.env.ONBOARD_REVIEWERS.includes("vars.ONBOARD_REVIEWERS"));
 });
