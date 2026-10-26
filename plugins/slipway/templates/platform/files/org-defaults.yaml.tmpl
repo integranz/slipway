@@ -1,0 +1,20 @@
+# Organisation template for the slipway onboarding poller (repository variable ONBOARD_ANSWERS_TEMPLATE on the plugin
+# repository). Rendered from platform.yaml by platform.cjs; `<name>` stands for the onboarded repository's name.
+# Install: gh variable set ONBOARD_ANSWERS_TEMPLATE -R <% github.org %>/slipway --body "$(grep -v '^#' org-defaults.yaml)"
+options.platform_scope: shared
+options.registry_scope: existing
+azure.location: <% location %>
+azure.resource_group: <% azure.resource_group %>
+azure.acr_name: <% azure.registry.name %>
+azure.acr_resource_group: <%#if azure.registry.existing%><%#if azure.registry.resource_group%><% azure.registry.resource_group %><%else%><% azure.resource_group %><%/if%><%else%><% azure.resource_group %><%/if%>
+azure.key_vault_name: <% azure.key_vault_name %>
+azure.container_app_environment: <% azure.container_app_environment %>
+<%#if azure.shared_apps_identity%>azure.identity_name: <% derived.apps_identity_name %>
+<%/if%>azure.state.resource_group: <% azure.state.resource_group %>
+azure.state.storage_account: <% azure.state.storage_account %>
+azure.state.container: <% azure.state.container %>
+github.cd_environment: <% environment %>
+<%#if jira%>jira.site_url: <% jira.site_url %>
+jira.project_key: <% jira.project_key %>
+options.tracker_transport: <% jira.tracker_transport %>
+<%/if%>
