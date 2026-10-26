@@ -1,3 +1,9 @@
+## [1.11.0](https://github.com/integranz/slipway/compare/v1.10.2...v1.11.0) (2026-10-26)
+
+### Features
+
+* **onboarding:** organisation-level Docker Hub credentials; the poller creates the deployment environment and the PR-only ruleset at dispatch ([#35](https://github.com/integranz/slipway/issues/35)) ([37ba185](https://github.com/integranz/slipway/commit/37ba18527de61dc3612d15af3a149fda40daed9a))
+
 ## [1.10.2](https://github.com/integranz/slipway/compare/v1.10.1...v1.10.2) (2026-10-15)
 
 ### Bug Fixes
