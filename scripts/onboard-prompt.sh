@@ -60,6 +60,10 @@ Rules for this run:
   No cloud, GitHub or secret administration, no terraform apply, no \`az\`, no \`gh secret\`, no \`gh api\` writes; print any
   human-only command instead of running it.
 - When a skill delegates to a sub-agent (explore, execute, verify) that is not available here, do that step yourself.
+- An app without a health route on a framework listed in "\$CLAUDE_PLUGIN_ROOT/skills/delivery-knowledge/references/health-route.md"
+  is not a missing value: add GET /health there as the reference describes (JSON status + version read from the VERSION
+  environment variable at request time, no cache, no backend call, exempt from auth middleware), with a unit test when the
+  project has a test framework, set apps[].health_path: /health, and include it in the commit. Stop only for an unknown framework.
 - For a \`stack: custom\` app without a Dockerfile, draft one as the dockerize skill describes and write it without
   asking (\`--yes\`); it lands in the pull request. Build it only if \`docker version\` works; otherwise mark the image
   claims UNVERIFIABLE and say so.
