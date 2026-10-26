@@ -57,11 +57,14 @@ fi
 
 if [ -n "$OWNER" ] && [ -n "$REPO_NAME" ] && gh auth status >/dev/null 2>&1; then
   echo "GitHub repository $OWNER/$REPO_NAME"
-  SECRETS="$(gh secret list -R "$OWNER/$REPO_NAME" --json name --jq '.[].name' 2>/dev/null)"; VARS="$(gh variable list -R "$OWNER/$REPO_NAME" --json name --jq '.[].name' 2>/dev/null)"
+  # repository-level plus the organisation-level secrets and variables this repository can read (public repositories on
+  # GitHub Free see organisation secrets; private ones need a paid plan)
+  SECRETS="$( { gh secret list -R "$OWNER/$REPO_NAME" --json name --jq '.[].name'; gh api "repos/$OWNER/$REPO_NAME/actions/organization-secrets" --jq '.secrets[].name'; } 2>/dev/null)"
+  VARS="$( { gh variable list -R "$OWNER/$REPO_NAME" --json name --jq '.[].name'; gh api "repos/$OWNER/$REPO_NAME/actions/organization-variables" --jq '.variables[].name'; } 2>/dev/null)"
   for s in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do printf '%s\n' "$SECRETS" | grep -qx "$s" && ok "secret $s" || miss "secret $s" "bash .slipway/setup-azure.sh --apply --set-github-secrets"; done
   if [ "$BASE_IMAGE" = "dhi" ]; then
-    printf '%s\n' "$SECRETS" | grep -qx DOCKERHUB_TOKEN && ok "secret DOCKERHUB_TOKEN" || miss "secret DOCKERHUB_TOKEN" "gh secret set DOCKERHUB_TOKEN -R $OWNER/$REPO_NAME --body \"\$(pbpaste)\"  (or from the seed file)"
-    printf '%s\n' "$VARS" | grep -qx DOCKERHUB_USERNAME && ok "variable DOCKERHUB_USERNAME" || miss "variable DOCKERHUB_USERNAME" "gh variable set DOCKERHUB_USERNAME -R $OWNER/$REPO_NAME --body <username>"
+    printf '%s\n' "$SECRETS" | grep -qx DOCKERHUB_TOKEN && ok "secret DOCKERHUB_TOKEN" "repository or organisation" || miss "secret DOCKERHUB_TOKEN" "once for the organisation: gh secret set DOCKERHUB_TOKEN --org $OWNER --visibility all --body \"\$(pbpaste)\"  (or -R $OWNER/$REPO_NAME for this repository only)"
+    printf '%s\n' "$VARS" | grep -qx DOCKERHUB_USERNAME && ok "variable DOCKERHUB_USERNAME" "repository or organisation" || miss "variable DOCKERHUB_USERNAME" "gh variable set DOCKERHUB_USERNAME --org $OWNER --visibility all --body <username>  (or -R $OWNER/$REPO_NAME)"
   fi
   ENVJSON="$(gh api "repos/$OWNER/$REPO_NAME/environments/$ENV" 2>/dev/null)"
   if [ -n "$ENVJSON" ]; then

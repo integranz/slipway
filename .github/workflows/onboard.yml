@@ -229,7 +229,7 @@ jobs:
             echo "1. Review and merge this pull request."
             echo "2. In **your** terminal, from the repository root on the default branch, run the Azure prerequisites (Entra app registration with federated credentials, resource groups, Terraform state storage, the \`AZURE_*\` repository secrets):"
             echo; echo '   ```'; echo '   bash .slipway/setup-azure.sh --apply --set-github-secrets'; echo '   ```'
-            echo "3. Then run \`/slipway:launch\` in Claude Code or Cursor on a desktop: it resumes at the cloud and GitHub phases (environment with you as required reviewer, pull-request-only ruleset, foundation plan → your approval → apply) and continues into the first CI/CD run, which waits for your approval."
+            echo "3. Then run \`/slipway:launch\` in Claude Code or Cursor on a desktop: it resumes at the cloud and GitHub phases (whatever the poller did not already create: the environment with a required reviewer, the pull-request ruleset; then the foundation plan → your approval → apply) and continues into the first CI/CD run, which waits for your approval."
             echo
             echo "<details><summary><code>.slipway/SETUP.md</code> from this branch (every step, who does it, how)</summary>"; echo; echo "$setup"; echo; echo "</details>"
           } > comment.md

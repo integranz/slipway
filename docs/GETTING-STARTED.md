@@ -13,7 +13,7 @@ This guide takes a new user from nothing to a verified deployment, then to day-t
 |---|---|---|
 | A GitHub account with admin on the repository (or organisation owner) | secrets, environment, branch ruleset | you can open *Settings* on the repository |
 | An Azure subscription where you can create resources and assign roles in a resource group | registry, key vault, container apps | `az account show` prints it after login |
-| Docker Hub account with access to Docker Hardened Images (`dhi.io`) | hardened base images (default `base_image: dhi`) | `docker login dhi.io` succeeds |
+| Docker Hub account with access to Docker Hardened Images (`dhi.io`) | hardened base images (default `base_image: dhi`); its token goes once into an organisation secret for CI | `docker login dhi.io` succeeds |
 | A Jira Cloud site and project (optional; `tracker: none` works too) | the delivery story and its subtasks | you can open the project in the browser |
 | Claude Code and/or Cursor | the hosts the plugin runs in | `claude --version`, Cursor → About |
 
@@ -155,7 +155,7 @@ This is the automation for "I have a repository with code, make it deployable." 
    ```
    gh secret set CURSOR_API_KEY -R integranz/slipway
    ```
-2. A fine-grained GitHub token for the PR annotation and the poller: resource owner = your organisation, all repositories, permissions Contents read, Issues write, Pull requests write (step by step in `docs/CURSOR-ONBOARDING.md`, "Creating `ONBOARD_GITHUB_TOKEN`"):
+2. A fine-grained GitHub token for the PR annotation and the poller: resource owner = your organisation, all repositories, permissions Contents read, Issues write, Pull requests write, Administration write (step by step in `docs/CURSOR-ONBOARDING.md`, "Creating `ONBOARD_GITHUB_TOKEN`"):
    ```
    gh secret set ONBOARD_GITHUB_TOKEN -R <org>/slipway --body "$(pbpaste)"
    ```
@@ -165,6 +165,12 @@ This is the automation for "I have a repository with code, make it deployable." 
    gh variable set JIRA_EMAIL --org integranz --body <email>
    ```
 4. For Cursor sessions with Jira tools: add `JIRA_EMAIL` and `JIRA_API_TOKEN` in the Cloud Agent Secrets tab.
+5. Docker Hub credentials for the hardened base images, once for the organisation (copy the access token to the clipboard first):
+   ```
+   gh secret set DOCKERHUB_TOKEN --org <org> --visibility all --body "$(pbpaste)"
+   gh variable set DOCKERHUB_USERNAME --org <org> --visibility all --body <username>
+   ```
+6. Optional: `gh variable set ONBOARD_REVIEWERS -R <org>/slipway --body "<login>,<login>"` names the required reviewers of the deployment environment the poller creates (default: the token's owner).
 
 **Per repository:**
 1. Write `answers.txt`, one `key: value` per line, with the values the interview could not guess (no ids, no secrets):
@@ -188,9 +194,10 @@ This is the automation for "I have a repository with code, make it deployable." 
    gh workflow run onboard.yml -R integranz/slipway -f repository=<owner>/<name> -f answers="$(cat answers.txt)"
    gh run watch -R integranz/slipway
    ```
-3. What you get, 5 to 15 minutes later: a pull request titled `slipway: onboard <name>` with `.slipway/config.yaml`, `SETUP.md`, `AGENTS.md`, the rules, the per-app CI/CD workflows, the Terraform modules and the Dockerfiles, plus a **comment** from the workflow listing the human steps and the label `slipway-onboarding`. The agent held no credential: nothing in Azure, GitHub or Jira changed yet.
-4. Review and merge the PR. If `tracker_transport` is `rest` or `both`, the merged repository's `slipway-tracker.yml` now creates the Jira story and closes the Bootstrap and Dockerize subtasks on its own.
-5. On your desktop, in the merged repository, run the Azure prerequisites and then the rest of the launch:
+3. The poller also creates the `dev` environment with a required reviewer and a pull-request-only ruleset on the default branch, so the first deployment waits for a human even before the pull request exists.
+4. What you get, 5 to 15 minutes later: a pull request titled `slipway: onboard <name>` with `.slipway/config.yaml`, `SETUP.md`, `AGENTS.md`, the rules, the per-app CI/CD workflows, the Terraform modules and the Dockerfiles, plus a **comment** from the workflow listing the human steps and the label `slipway-onboarding`. The agent held no credential: nothing in Azure, GitHub or Jira changed yet.
+5. Review and merge the PR. If `tracker_transport` is `rest` or `both`, the merged repository's `slipway-tracker.yml` now creates the Jira story and closes the Bootstrap and Dockerize subtasks on its own.
+6. On your desktop, in the merged repository, run the Azure prerequisites and then the rest of the launch:
    ```
    bash .slipway/setup-azure.sh --apply --set-github-secrets
    ```

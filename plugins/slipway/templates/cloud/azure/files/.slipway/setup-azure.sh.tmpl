@@ -164,5 +164,5 @@ printf '  AZURE_CLIENT_ID=%s\n  AZURE_TENANT_ID=%s\n  AZURE_SUBSCRIPTION_ID=%s\n
 else
   printf '  Then:  printf %%s "$AZURE_CLIENT_ID" | gh secret set AZURE_CLIENT_ID -R %s/%s   (same for TENANT and SUBSCRIPTION), or re-run with --apply --set-github-secrets\n' "$GH_OWNER" "$GH_REPO"
 fi
-printf '  Still manual: gh secret set DOCKERHUB_TOKEN -R %s/%s ; gh variable set DOCKERHUB_USERNAME -R %s/%s --body <user> ; environment "%s" with a required reviewer.\n' "$GH_OWNER" "$GH_REPO" "$GH_OWNER" "$GH_REPO" "$GH_ENV"
+printf '  Still manual unless the organisation already has them: gh secret set DOCKERHUB_TOKEN --org %s --visibility all ; gh variable set DOCKERHUB_USERNAME --org %s --visibility all --body <user>. Environment "%s" with a required reviewer: created by the onboarding poller at dispatch, otherwise by /slipway:launch.\n' "$GH_OWNER" "$GH_OWNER" "$GH_ENV"
 <%/eq%>say "Done$($APPLY || echo ' (dry run)'). Next: /slipway:plan dev --layer foundation"

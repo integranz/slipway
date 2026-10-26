@@ -6,8 +6,10 @@
 // is the one onboard.yml starts. Every write to a target repository is an issue, a comment or a label; never a commit,
 // a secret or a setting.
 // usage: node onboard-poller.cjs [--dry-run] [--org <login>] [--max-dispatches <n>] [--repo <owner/name>]
-// env: ONBOARD_GITHUB_TOKEN (org reads, issues; fine-grained: Contents read, Issues write, Metadata read on the org's
-//      repos), GITHUB_TOKEN (dispatches onboard.yml in GITHUB_REPOSITORY; needs actions: write), ONBOARD_ANSWERS_TEMPLATE
+// env: ONBOARD_GITHUB_TOKEN (org reads, issues, environments and rulesets; fine-grained: Contents read, Issues write,
+//      Administration write, Metadata read on the org's repos), ONBOARD_REVIEWERS (comma-separated logins of the required
+//      reviewers of the deployment environment; default: the token's owner), GITHUB_TOKEN (dispatches onboard.yml in
+//      GITHUB_REPOSITORY; needs actions: write), ONBOARD_ANSWERS_TEMPLATE
 //      (org defaults with <name> placeholders), ONBOARD_EXCLUDE (comma list of owner/name; the poller's own repository is
 //      always excluded), GITHUB_REPOSITORY, GITHUB_STEP_SUMMARY (optional).
 "use strict";
@@ -62,6 +64,21 @@ function answersBlocks(issue) {
 function latestAnswers(issue) { const blocks = answersBlocks(issue); if (!blocks.length) return null; return { text: blocks.map((b) => b.text).join("\n"), at: blocks[blocks.length - 1].at }; }
 function parseAnswers(text) { const map = new Map(); for (const line of String(text || "").split("\n")) { const m = line.match(/^\s*([A-Za-z0-9_.\[\]]+)\s*:\s*(.*?)\s*$/); if (m && !line.trim().startsWith("#")) map.set(m[1], m[2]); } return map; }
 function mergeAnswers(base, override) { const map = parseAnswers(base); for (const [k, v] of parseAnswers(override)) map.set(k, v); return [...map].map(([k, v]) => `${k}: ${v}`).join("\n"); }
+// GitHub gates created at dispatch, so the first CD run is protected before the pull request exists:
+// the deployment environment with required reviewers (GitHub would otherwise auto-create it unprotected on first use) and
+// a pull-request-only ruleset on the default branch (no required checks yet: app names are unknown until the agent decides,
+// and with pr_checks: path-filtered they must not be required; /slipway:launch adds them for always-run-gate).
+function environmentBody(reviewerIds) { return { reviewers: reviewerIds.map((id) => ({ type: "User", id })), deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }; }
+function prOnlyRuleset(defaultBranch) {
+  return { name: `${defaultBranch}: pull requests (slipway)`, target: "branch", enforcement: "active", conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } }, bypass_actors: [],
+    rules: [{ type: "deletion" }, { type: "non_fast_forward" }, { type: "pull_request", parameters: { required_approving_review_count: 0, dismiss_stale_reviews_on_push: false, require_code_owner_review: false, require_last_push_approval: false, required_review_thread_resolution: false } }] };
+}
+function gatesPlan({ envJson, rulesJson }) {
+  const reviewers = envJson && Array.isArray(envJson.protection_rules) ? envJson.protection_rules.filter((r) => r.type === "required_reviewers").length : 0;
+  const hasPr = Array.isArray(rulesJson) && rulesJson.some((r) => r.type === "pull_request");
+  return { createEnv: !envJson || reviewers === 0, createRuleset: !hasPr };
+}
+function environmentName(answersText) { return parseAnswers(answersText).get("github.cd_environment") || "dev"; }
 function runEndedMarkers(issue) { return (issue.comments || []).map((c) => marker(c.body, "run-ended")).filter(Boolean); }
 function marker(text, key) { const m = String(text || "").match(new RegExp(`<!-- slipway:${key}((?: [a-z_]+=[^ >]+)*) -->`)); if (!m) return null; const o = {}; for (const kv of m[1].trim().split(/\s+/).filter(Boolean)) { const [k, v] = kv.split("="); o[k] = v; } return o; }
 function dispatchMarkers(issue) { return (issue.comments || []).map((c) => marker(c.body, "dispatched")).filter(Boolean); }
@@ -127,6 +144,7 @@ function main() {
   const exclude = new Set([self.toLowerCase(), ...String(process.env.ONBOARD_EXCLUDE || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)]);
   const repos = json(gh(readToken, ["api", `orgs/${org}/repos?per_page=100&type=all`, "--paginate", "--slurp"])).flat()
     .filter((r) => !only || r.full_name.toLowerCase() === only.toLowerCase()).sort((a, b) => a.name.localeCompare(b.name));
+  const reviewers = DRY ? [] : resolveReviewers(readToken);
   const rows = []; let dispatched = 0;
   for (const r of repos) {
     const full = r.full_name; const repo = { name: r.name, full_name: full, private: !!r.private, archived: !!r.archived, fork: !!r.fork, default_branch: r.default_branch, excluded: exclude.has(full.toLowerCase()) };
@@ -150,7 +168,8 @@ function main() {
       }
       const d = classify(ctx); let detail = d.reason;
       if ((d.action === "dispatch" || d.action === "redispatch") && dispatched >= maxDispatches) { d.action = "deferred"; detail = `dispatch deferred: ${maxDispatches} per tick already used`; }
-      if (!DRY) detail = act(full, repo, ctx, d, { readToken, dispatchToken, self, template }) || detail;
+      if (!DRY) detail = act(full, repo, ctx, d, { readToken, dispatchToken, self, template, reviewers }) || detail;
+      else if (d.action === "dispatch" || d.action === "redispatch") detail += " (would also ensure the deployment environment and the pull-request ruleset)";
       if (d.action === "dispatch" || d.action === "redispatch") dispatched++;
       rows.push({ repo: full, action: d.action, detail });
     } catch (e) { rows.push({ repo: full, action: "error", detail: String(e.message).slice(0, 200) }); }
@@ -176,6 +195,32 @@ function dispatch(repoFull, branch, answers, { dispatchToken, self }) {
   }
   return url;
 }
+function resolveReviewers(token) { // ONBOARD_REVIEWERS (comma-separated logins) or the token's owner
+  const logins = String(process.env.ONBOARD_REVIEWERS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const out = [];
+  if (!logins.length) { const me = json(gh(token, ["api", "user"])); if (me && me.id) out.push({ login: me.login, id: me.id }); return out; }
+  for (const l of logins) { const u = json(gh(token, ["api", `users/${l}`], { ok404: true })); if (u && u.id) out.push({ login: u.login, id: u.id }); }
+  return out;
+}
+function ensureGates(full, repo, envName, token, reviewers) {
+  const lines = [];
+  try {
+    const envJson = json(gh(token, ["api", `repos/${full}/environments/${encodeURIComponent(envName)}`], { ok404: true }));
+    const rulesJson = json(gh(token, ["api", `repos/${full}/rules/branches/${encodeURIComponent(repo.default_branch)}`], { ok404: true })) || [];
+    const plan = gatesPlan({ envJson, rulesJson });
+    if (plan.createEnv) {
+      if (!reviewers.length) lines.push(`environment \`${envName}\`: NOT created (no reviewer resolved: set the ONBOARD_REVIEWERS variable)`);
+      else {
+        gh(token, ["api", "-X", "PUT", `repos/${full}/environments/${encodeURIComponent(envName)}`, "--input", "-"], { input: JSON.stringify(environmentBody(reviewers.map((r) => r.id))) });
+        try { gh(token, ["api", "-X", "POST", `repos/${full}/environments/${encodeURIComponent(envName)}/deployment-branch-policies`, "-f", `name=${repo.default_branch}`, "-f", "type=branch"]); } catch { /* exists */ }
+        lines.push(`environment \`${envName}\` created with required reviewer${reviewers.length > 1 ? "s" : ""} ${reviewers.map((r) => "@" + r.login).join(", ")}; deployments from \`${repo.default_branch}\` only`);
+      }
+    } else lines.push(`environment \`${envName}\` already protected`);
+    if (plan.createRuleset) { gh(token, ["api", "-X", "POST", `repos/${full}/rulesets`, "--input", "-"], { input: JSON.stringify(prOnlyRuleset(repo.default_branch)) }); lines.push(`ruleset \`${repo.default_branch}: pull requests (slipway)\` created (pull requests only; required checks are added by /slipway:launch when pr_checks is always-run-gate)`); }
+    else lines.push(`ruleset with pull requests already applies to \`${repo.default_branch}\``);
+  } catch (e) { lines.push(`GitHub gates: could not create (${String(e.message).slice(0, 140)}); the token needs Administration: read and write on the organisation's repositories; /slipway:launch creates them later`); }
+  return lines;
+}
 function act(full, repo, ctx, d, env) {
   const { readToken } = env; const n = ctx.issue && ctx.issue.number; const head7 = ctx.head ? ctx.head.slice(0, 7) : "";
   switch (d.action) {
@@ -189,9 +234,10 @@ function act(full, repo, ctx, d, env) {
       let num = n;
       if (!num) { const i = createIssue(full, readToken, onboardingBody(repo, ctx.head, d.detector, answers), LABELS.onboarding.name); num = i.number; }
       else if (d.relabel || d.clearNeedsHuman) { setLabels(full, readToken, num, [LABELS.onboarding.name]); if (d.relabel) gh(readToken, ["api", "-X", "PATCH", `repos/${full}/issues/${num}`, "-f", `body=${onboardingBody(repo, ctx.head, d.detector, answers)}`]); }
+      const gates = ensureGates(full, repo, environmentName(answers), readToken, env.reviewers || []);
       const url = dispatch(full, repo.default_branch, answers, env);
       const withWhat = d.overrides ? `the organisation template plus the \`\`\`answers block(s) on this issue` : "the organisation template";
-      comment(full, readToken, num, `Dispatched onboarding run: ${url}\n\nAnswers given to the agent (${withWhat}):\n\n\`\`\`\n${answers}\n\`\`\`\n\nA Cursor Cloud Agent installs slipway, runs \`/slipway:launch --yes --until bootstrap\` with these answers, commits, pushes its branch and opens the pull request \`slipway: onboard ${repo.name}\` (the workflow opens it from the pushed branch if the agent cannot) and the workflow comments the human steps on it. To change an answer, add a comment with a fenced block tagged \`answers\` (one \`key: value\` per line); the next tick retries with it once the current run has ended.\n\n<!-- slipway:dispatched at=${new Date().toISOString()} run=${url} -->`);
+      comment(full, readToken, num, `Dispatched onboarding run: ${url}\n\nGitHub gates (so the first deployment waits for a human and the default branch takes pull requests only):\n${gates.map((l) => `- ${l}`).join("\n")}\n\nAnswers given to the agent (${withWhat}):\n\n\`\`\`\n${answers}\n\`\`\`\n\nA Cursor Cloud Agent installs slipway, runs \`/slipway:launch --yes --until bootstrap\` with these answers, commits, pushes its branch and opens the pull request \`slipway: onboard ${repo.name}\` (the workflow opens it from the pushed branch if the agent cannot) and the workflow comments the human steps on it. To change an answer, add a comment with a fenced block tagged \`answers\` (one \`key: value\` per line); the next tick retries with it once the current run has ended.\n\n<!-- slipway:dispatched at=${new Date().toISOString()} run=${url} -->`);
       return `${d.action} → issue #${num}, run ${url}${d.overrides ? " (with answers from the issue)" : ""}`;
     }
     default: return null;
@@ -203,5 +249,5 @@ function onboardingBody(repo, head, det, answers) {
 function notDeployableBody(repo, head, det) {
   return `## slipway onboarding\n\nNo deployable application found on \`${repo.default_branch}\` at \`${(head || "").slice(0, 7)}\`. The poller looked for: ${det.lookedFor.join(", ")} (outside node_modules, vendor, dist, build, bin, obj).\n\nPush code with one of those manifests and the next tick (every 15 minutes) re-checks this repository. If the detector is wrong, comment with a fenced block tagged \`answers\` (for example \`apps[0].path: .\` and the app's kind, stack, port and health path): the next tick onboards with it. If this repository is not meant to be deployed, close this issue.\n\n<!-- slipway:not-deployable head=${head} -->`;
 }
-module.exports = { classify, isDeployable, renderAnswers, hyphenSlug, alnumSlug, marker, answersBlocks, latestAnswers, mergeAnswers, LABELS, ISSUE_TITLE, MANIFESTS };
+module.exports = { classify, isDeployable, renderAnswers, hyphenSlug, alnumSlug, marker, answersBlocks, latestAnswers, mergeAnswers, environmentBody, prOnlyRuleset, gatesPlan, environmentName, LABELS, ISSUE_TITLE, MANIFESTS };
 if (require.main === module) main();
