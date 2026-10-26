@@ -1,3 +1,9 @@
+## [1.12.0](https://github.com/integranz/slipway/compare/v1.11.0...v1.12.0) (2026-10-26)
+
+### Features
+
+* **platform:** shared platform — platform_scope shared, platform generator, health-route convention (re-landing [#36](https://github.com/integranz/slipway/issues/36), [#37](https://github.com/integranz/slipway/issues/37), [#38](https://github.com/integranz/slipway/issues/38) on main) ([#39](https://github.com/integranz/slipway/issues/39)) ([69572b9](https://github.com/integranz/slipway/commit/69572b9533c20f2606357b08df5eeacfb6912e9c))
+
 ## [1.11.0](https://github.com/integranz/slipway/compare/v1.10.2...v1.11.0) (2026-10-26)
 
 ### Features
