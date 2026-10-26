@@ -1,0 +1,27 @@
+# Values rendered from platform.yaml. Change them there and re-render with platform.cjs.
+locals {
+  platform    = "<% name %>"
+  environment = "<% environment %>"
+  location    = "<% location %>"
+
+  resource_group_name = "<% azure.resource_group %>"
+  acr_name            = "<% azure.registry.name %>"
+  key_vault_name      = "<% azure.key_vault_name %>"
+  cae_name            = "<% azure.container_app_environment %>"
+  log_analytics_name  = "<% azure.log_analytics_name %>"
+  cicd_identity_name  = "<% azure.cicd_identity_name %>" # created by setup-platform.sh (flexible federated credentials)
+<%#if azure.shared_apps_identity%>  apps_identity_name  = "<% derived.apps_identity_name %>"
+<%/if%>
+  tags = {
+    platform    = local.platform
+    environment = local.environment
+    managed_by  = "terraform"
+    generator   = "slipway-platform"
+  }
+}
+<%#if azure.registry.existing%>
+# Existing registry: referenced by name, never created or destroyed here.
+locals {
+  acr_resource_group_name = "<%#if azure.registry.resource_group%><% azure.registry.resource_group %><%else%><% azure.resource_group %><%/if%>"
+}
+<%/if%>

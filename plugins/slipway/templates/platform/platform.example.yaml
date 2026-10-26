@@ -1,0 +1,34 @@
+# slipway platform definition — input of `node <plugin>/scripts/platform.cjs render --config platform.yaml --out <dir>`.
+# One platform per organisation and environment: the registry, key vault, Container Apps environment, logs, state storage
+# and the CI/CD identity every repository of the organisation deploys with (options.platform_scope: shared).
+# Shape reference only: replace every value. No subscription or tenant id here (they come from `az account show`).
+name: slipway                    # short platform name used in resource names below
+environment: dev
+location: westeurope
+
+github:
+  org: example-org               # GitHub organisation whose repositories deploy through this platform
+  org_id: 123456789              # gh api orgs/<org> --jq .id  (the federated credentials bind to this immutable id)
+  default_branch: main           # branch whose CI pushes images (the CI credential)
+
+azure:
+  resource_group: rg-slipway-dev           # created by setup-platform.sh; apps of every repository deploy into it
+  registry:
+    name: acrslipwaydev
+    existing: false                        # true: an existing registry is referenced (name + resource_group below), never created
+    resource_group: ""                     # only when existing: true and it lives in another resource group
+  key_vault_name: kv-slipway-dev
+  container_app_environment: cae-slipway-dev
+  log_analytics_name: log-slipway-dev
+  cicd_identity_name: id-slipway-cicd-dev  # user-assigned managed identity GitHub Actions logs in as (every repository)
+  shared_apps_identity: false              # true also creates id-slipway-apps-dev for repositories that choose identity_scope: shared
+  state:
+    resource_group: rg-slipway-tfstate
+    storage_account: stslipwaytf           # 3-24 lowercase letters and digits, globally unique
+    container: tfstate
+
+# Optional: tracker lines for the organisation template (omit the block for repositories without Jira)
+jira:
+  site_url: https://example.atlassian.net
+  project_key: DEVOPS
+  tracker_transport: both                  # rest | both (see options.tracker_transport)

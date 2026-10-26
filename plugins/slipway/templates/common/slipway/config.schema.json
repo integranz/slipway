@@ -178,6 +178,20 @@
             "both"
           ],
           "description": "How unattended runs and the generated workflows reach the tracker: the Rovo MCP in sessions only (default), plus the plugin's Jira REST script with JIRA_EMAIL/JIRA_API_TOKEN (rest), plus a token-based Jira MCP server in .cursor/mcp.json (both). rest and both need tracker: jira."
+        },
+        "platform_scope": {
+          "enum": [
+            "per-repository",
+            "shared"
+          ],
+          "description": "Own cloud foundation per repository (default) or a shared organisation platform set up once: with shared, only infra/apps/<app> is rendered and azure.* names the platform's resources (registry_scope must be existing, azure.container_app_environment is required)."
+        },
+        "identity_scope": {
+          "enum": [
+            "shared",
+            "per-app"
+          ],
+          "description": "One runtime identity per repository (azure.identity_name; default with platform_scope: per-repository) or one per app created by the app module with AcrPull and Key Vault Secrets User on that app's secrets only (default with platform_scope: shared)."
         }
       }
     },
@@ -243,6 +257,11 @@
           "type": "string",
           "pattern": "^[-\\w\\.\\(\\)]{1,90}$",
           "description": "Resource group of an existing shared registry (options.registry_scope: existing) when it is not azure.resource_group."
+        },
+        "container_app_environment": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,30}[a-z0-9]$",
+          "description": "Name of the Container Apps environment the apps join. Required with options.platform_scope: shared (the platform's environment); otherwise the foundation creates cae-<project>-<env>."
         }
       }
     },

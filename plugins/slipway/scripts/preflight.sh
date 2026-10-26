@@ -40,6 +40,7 @@ PY
 }
 OWNER="$(yget github.owner)"; REPO_NAME="$(yget github.repo)"; ENV="$(jget cd_environment)"; [ -n "$ENV" ] || ENV=dev
 BASE_IMAGE="$(yget options.base_image)"; TRACKER="$(yget options.tracker)"; ACR="$(yget azure.acr_name)"; KV="$(yget azure.key_vault_name)"
+PLATFORM="$(yget options.platform_scope)"; CAE="$(yget azure.container_app_environment)"; RG="$(yget azure.resource_group)"
 
 echo "Tools"
 for t in az gh docker terraform node git; do command -v "$t" >/dev/null 2>&1 && ok "$t" "$(command -v "$t")" || miss "$t" "install $t"; done
@@ -61,7 +62,8 @@ if [ -n "$OWNER" ] && [ -n "$REPO_NAME" ] && gh auth status >/dev/null 2>&1; the
   # GitHub Free see organisation secrets; private ones need a paid plan)
   SECRETS="$( { gh secret list -R "$OWNER/$REPO_NAME" --json name --jq '.[].name'; gh api "repos/$OWNER/$REPO_NAME/actions/organization-secrets" --jq '.secrets[].name'; } 2>/dev/null)"
   VARS="$( { gh variable list -R "$OWNER/$REPO_NAME" --json name --jq '.[].name'; gh api "repos/$OWNER/$REPO_NAME/actions/organization-variables" --jq '.variables[].name'; } 2>/dev/null)"
-  for s in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do printf '%s\n' "$SECRETS" | grep -qx "$s" && ok "secret $s" || miss "secret $s" "bash .slipway/setup-azure.sh --apply --set-github-secrets"; done
+  if [ "$PLATFORM" = "shared" ]; then AZ_FIX="organisation secret set once by the platform owner: gh secret set $s --org $OWNER --visibility all"; else AZ_FIX="bash .slipway/setup-azure.sh --apply --set-github-secrets"; fi
+  for s in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do printf '%s\n' "$SECRETS" | grep -qx "$s" && ok "secret $s" "repository or organisation" || miss "secret $s" "${AZ_FIX/\$s/$s}"; done
   if [ "$BASE_IMAGE" = "dhi" ]; then
     printf '%s\n' "$SECRETS" | grep -qx DOCKERHUB_TOKEN && ok "secret DOCKERHUB_TOKEN" "repository or organisation" || miss "secret DOCKERHUB_TOKEN" "once for the organisation: gh secret set DOCKERHUB_TOKEN --org $OWNER --visibility all --body \"\$(pbpaste)\"  (or -R $OWNER/$REPO_NAME for this repository only)"
     printf '%s\n' "$VARS" | grep -qx DOCKERHUB_USERNAME && ok "variable DOCKERHUB_USERNAME" "repository or organisation" || miss "variable DOCKERHUB_USERNAME" "gh variable set DOCKERHUB_USERNAME --org $OWNER --visibility all --body <username>  (or -R $OWNER/$REPO_NAME)"
@@ -75,7 +77,12 @@ if [ -n "$OWNER" ] && [ -n "$REPO_NAME" ] && gh auth status >/dev/null 2>&1; the
   printf '%s' "$RULES" | grep -q '"pull_request"' && ok "branch ruleset (pull requests + checks)" "$(printf '%s' "$RULES" | python3 -c 'import json,sys; r=json.load(sys.stdin); c=[x for x in r if x.get("type")=="required_status_checks"]; print(", ".join(s["context"] for x in c for s in x["parameters"]["required_status_checks"]))' 2>/dev/null)" || miss "branch ruleset" "node scripts/ruleset.cjs | gh api -X POST repos/$OWNER/$REPO_NAME/rulesets --input -"
 fi
 
-if az account show >/dev/null 2>&1 && [ -x .slipway/setup-azure.sh ]; then
+if [ "$PLATFORM" = "shared" ] && az account show >/dev/null 2>&1; then
+  echo "Shared organisation platform (options.platform_scope: shared; nothing to set up from this repository)"
+  [ -n "$ACR" ] && { az acr show -n "$ACR" >/dev/null 2>&1 && ok "platform registry $ACR" || miss "platform registry $ACR" "the platform owner applies the platform foundation first"; }
+  [ -n "$KV" ] && { az keyvault show -n "$KV" >/dev/null 2>&1 && ok "platform key vault $KV" || miss "platform key vault $KV" "the platform owner applies the platform foundation first"; }
+  [ -n "$CAE" ] && [ -n "$RG" ] && { az containerapp env show -n "$CAE" -g "$RG" >/dev/null 2>&1 && ok "platform Container Apps environment $CAE" || miss "platform Container Apps environment $CAE" "the platform owner applies the platform foundation first (resource group $RG)"; }
+elif az account show >/dev/null 2>&1 && [ -x .slipway/setup-azure.sh ]; then
   echo "Azure prerequisites (dry run of .slipway/setup-azure.sh)"
   DRY="$(bash .slipway/setup-azure.sh 2>/dev/null)"; N="$(printf '%s\n' "$DRY" | grep -cE '^\s+would ' || true)"
   [ "${N:-0}" = "0" ] && ok "setup-azure.sh" "nothing to change" || miss "setup-azure.sh" "$N change(s) pending: bash .slipway/setup-azure.sh --apply --set-github-secrets"

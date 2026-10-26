@@ -6,7 +6,7 @@ const validateSchema = require("./validate-config.generated.cjs");
 const PLUGIN_ROOT = path.resolve(__dirname, "..", "..");
 const OPTIONS_PATH = path.join(PLUGIN_ROOT, "templates", "common", "slipway", "options.yaml");
 // Optional dimensions and the value they take when the config omits them.
-const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui", config_store: "env", database: "none", registry_scope: "per-repository", apply_gate: "prompt", evidence_store: "release", tracker_transport: "mcp" };
+const OPTION_DEFAULTS = { cd_trigger: "manual", pr_checks: "path-filtered", cd_approval: "github-ui", config_store: "env", database: "none", registry_scope: "per-repository", apply_gate: "prompt", evidence_store: "release", tracker_transport: "mcp", platform_scope: "per-repository" };
 
 function loadYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
 function loadOptions() { return loadYaml(OPTIONS_PATH); }
@@ -17,6 +17,8 @@ function pluginVersion() {
 function applyDefaults(config) {
   if (config && config.options && typeof config.options === "object") {
     for (const [k, v] of Object.entries(OPTION_DEFAULTS)) if (config.options[k] === undefined) config.options[k] = v;
+    // one identity per repository unless the repository joins the shared platform, where each app gets its own
+    if (config.options.identity_scope === undefined) config.options.identity_scope = config.options.platform_scope === "shared" ? "per-app" : "shared";
   }
   return config;
 }
@@ -47,6 +49,11 @@ function checkConfig(config, options) {
   }
   if (config.options.tracker_transport && config.options.tracker_transport !== "mcp" && config.options.tracker !== "jira") {
     errors.push(`options.tracker_transport=${config.options.tracker_transport} needs options.tracker=jira (the REST script and the token MCP server are Jira Cloud transports)`);
+  }
+  if (config.options.platform_scope === "shared") {
+    if (config.options.registry_scope !== "existing") errors.push("options.platform_scope=shared needs options.registry_scope=existing: the platform owns the registry; name it in azure.acr_name (and azure.acr_resource_group)");
+    if (!config.azure || !config.azure.container_app_environment) errors.push("options.platform_scope=shared needs azure.container_app_environment: the platform's Container Apps environment the apps join");
+    if (config.options.identity_scope === "shared" && (!config.azure || !config.azure.identity_name)) errors.push("options.platform_scope=shared with options.identity_scope=shared needs azure.identity_name: the platform's runtime identity");
   }
   if (config.options.registry_scope === "per-repository" && config.azure && config.azure.acr_resource_group && config.azure.acr_resource_group !== config.azure.resource_group) {
     errors.push(`azure.acr_resource_group is set to '${config.azure.acr_resource_group}' but options.registry_scope=per-repository creates the registry in azure.resource_group; remove it or choose registry_scope=existing`);
@@ -154,14 +161,19 @@ function derive(config, options, repoRoot) {
     cd_trigger: config.options.cd_trigger, pr_checks: config.options.pr_checks, cd_approval: config.options.cd_approval, in_session_approval: config.options.cd_approval === "in-session",
     auto_cd: config.options.cd_trigger === "on-ci-success", gate: config.options.pr_checks === "always-run-gate",
   };
-  // Upstream reachability differs per compute: on Container Apps every app is reachable as http://<app-name> (port 80,
-  // through the environment proxy); in local docker compose the service name resolves and the container port is used.
+  // On the shared platform several repositories share one Container Apps environment, so container apps and Key Vault
+  // secrets are namespaced by project; per repository the app name alone is unique.
+  const platformShared = config.options.platform_scope === "shared";
+  const containerAppName = (n) => platformShared ? `${config.project.name}-${n}` : n;
+  const kvSecretName = (n) => platformShared ? `${config.project.name}-${n}` : n;
+  // Upstream reachability differs per compute: on Container Apps every app is reachable as http://<container app name>
+  // (port 80, through the environment proxy); in local docker compose the service name resolves and the container port is used.
   const apps = config.apps.map((a, i) => {
     const appPath = normPath(a.path); const atRoot = appPath === "."; const appDir = atRoot ? "" : appPath + "/";
     const hasFile = (rel) => { try { return !!repoRoot && fs.existsSync(path.join(repoRoot, rel)); } catch { return false; } };
     const hasCsproj = () => { try { return !!repoRoot && fs.readdirSync(path.join(repoRoot, appPath), { withFileTypes: true }).some(e => e.name.endsWith(".csproj")); } catch { return false; } };
     const upstreams = (a.upstreams || []).map(n => ({ name: n, port: byName[n]?.port || 8080, path_prefix: "/api/",
-      url_cloud: config.options.compute === "aca" ? `http://${n}` : `http://${n}:${byName[n]?.port || 8080}`,
+      url_cloud: config.options.compute === "aca" ? `http://${containerAppName(n)}` : `http://${n}:${byName[n]?.port || 8080}`,
       url_local: `http://${n}:${byName[n]?.port || 8080}` }));
     const build = buildDefaults(a, repoRoot);
     // Build inputs outside the app path: declared `paths` plus detected .NET project references.
@@ -204,7 +216,8 @@ function derive(config, options, repoRoot) {
       test_services: (a.test_services || []).map(s => ({ ...s, env_list: Object.entries(s.env || {}).map(([k, v]) => ({ name: k, value: v })) })),
       test_env_list: Object.entries(a.test_env || {}).map(([k, v]) => ({ name: k, value: v })),
       external: a.kind !== "worker", has_ingress: a.kind !== "worker",
-      secrets: a.secrets || [], env_list: Object.entries(a.env || {}).map(([k, v]) => ({ name: k, value: v })),
+      secrets: (a.secrets || []).map(s => ({ ...s, kv_name: kvSecretName(s.name) })), env_list: Object.entries(a.env || {}).map(([k, v]) => ({ name: k, value: v })),
+      container_app_name: containerAppName(a.name), identity_name_app: `id-${config.project.name}-${a.name}`,
       cpu: (a.resources && a.resources.cpu) || 0.25, memory: (a.resources && a.resources.memory) || "0.5Gi",
       min_replicas: (a.scale && a.scale.min !== undefined) ? a.scale.min : 1, max_replicas: (a.scale && a.scale.max) || 2,
       upstream_names: a.upstreams || [],
@@ -224,6 +237,9 @@ function derive(config, options, repoRoot) {
     apply_gate: config.options.apply_gate,
     evidence_store: config.options.evidence_store,
     evidence_release: config.options.evidence_store === "release",
+    platform_shared: platformShared,
+    identity_per_app: config.options.identity_scope === "per-app",
+    cae_name: (config.azure && config.azure.container_app_environment) || `cae-${config.project.name}-${env}`,
     tracker_transport: config.options.tracker_transport,
     tracker_rest: config.options.tracker === "jira" && config.options.tracker_transport !== "mcp",
     tracker_token_mcp: config.options.tracker === "jira" && config.options.tracker_transport === "both",

@@ -67,6 +67,7 @@ const rendered = [];
 for (const item of plan) {
   const relDest = path.relative(repo, item.dest);
   if (relDest.startsWith("..")) { console.error(`refusing to write outside repo: ${item.dest}`); process.exit(1); }
+  if (ctx.derived.platform_shared && (/^infra\/foundation(\/|$)/.test(relDest) || relDest === ".slipway/setup-azure.sh")) { console.log(`  omit    ${relDest} (shared platform: owned by the platform repository)`); continue; }
   let content = fs.readFileSync(item.src, "utf8");
   if (item.tmpl) {
     try { content = render(content, item.context); }
