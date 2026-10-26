@@ -50,6 +50,20 @@ dimensions:
       per-repository: { status: implemented, label: "Own registry, created by this repository's foundation layer (default; the resource group is the security boundary)" }
       existing:       { status: implemented, registry: acr, label: "Existing Azure Container Registry shared by several repositories, chosen in the interview from the registries you can assign roles on (scripts/registries.cjs); named in azure.acr_name (and azure.acr_resource_group when it lives elsewhere); the foundation layer references it and assigns AcrPush to this repository's CI/CD principal, AcrPull to the app identity and Reader for the app layer. The human applying the foundation needs role-assignment rights on that registry", note: "images stay namespaced <project>/<app>; a shared Container Apps environment or Log Analytics can follow the same pattern later" }
 
+  platform_scope:
+    question: Does this repository own its cloud foundation, or does it join a platform the organisation set up once?
+    depends_on: cloud
+    options:
+      per-repository: { status: implemented, label: "Own foundation (default): this repository's infra/foundation creates its key vault, identity, logs and Container Apps environment in azure.resource_group, and .slipway/setup-azure.sh creates its Entra app, federated credentials and state storage" }
+      shared:         { status: implemented, cloud: azure, label: "Shared organisation platform, set up once: registry, key vault, Container Apps environment, logs and state storage exist already and are named in azure.* (registry_scope must be existing); this repository renders only infra/apps/<app>, applied by its CD behind the environment approval; no infra/foundation, no setup-azure.sh; the AZURE_* identifiers are organisation secrets" }
+
+  identity_scope:
+    question: Does each app run under its own managed identity, or do all apps of this repository share one?
+    depends_on: platform_scope
+    options:
+      shared:  { status: implemented, label: "One user-assigned identity per repository (azure.identity_name) with AcrPull on the registry and Key Vault Secrets User on the whole vault (default with platform_scope: per-repository, created by infra/foundation)" }
+      per-app: { status: implemented, label: "One user-assigned identity per app, created by the app module with AcrPull on the registry and Key Vault Secrets User on that app's secrets only (default with platform_scope: shared; the CI/CD identity must hold the conditioned role-assignment rights the platform grants it)" }
+
   runner:
     question: Which CI/CD runner executes the pipelines?
     options:
