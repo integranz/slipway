@@ -7,7 +7,7 @@ allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/*), Read, Glob, Grep, Age
 
 # /slipway:dockerize — image for one app
 
-Arguments: `$0` = app path or app name from `.slipway/config.yaml` (e.g. `apps/api` or `api`). Flags: `--no-run` (build only), `--compose` (after the single-app check, run every app with `compose.yaml` and test the frontend → API proxy), `--force` (re-render the Dockerfile even if it was edited), `--yes` (unattended: write a drafted `stack: custom` Dockerfile without asking, and when no Docker daemon is reachable render only and mark the build/run/health claims UNVERIFIABLE instead of stopping).
+Arguments: `$0` = app path or app name from `.slipway/config.yaml` (e.g. `apps/api` or `api`). Flags: `--no-run` (build only), `--compose` (after the single-app check, run every app with `compose.yaml` and test the frontend → API proxy), `--force` (re-render the Dockerfile even if it was edited), `--yes` (unattended: write a drafted `stack: custom` Dockerfile without asking, and when no Docker daemon is reachable render only and mark the build/run/health claims UNVERIFIABLE instead of stopping). A `custom` app without a health route on a recognised framework gets `/health` added as `delivery-knowledge/references/health-route.md` describes (reads `VERSION` at request time), in the same change as the Dockerfile.
 
 ## Preconditions
 1. `.slipway/config.yaml` exists and validates: `node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-config.cjs" .slipway/config.yaml`. Otherwise stop and point to `/slipway:bootstrap`.

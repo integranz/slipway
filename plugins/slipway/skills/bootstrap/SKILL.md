@@ -92,7 +92,7 @@ Next: /slipway:launch (everything else, end to end) or /slipway:dockerize <first
 
 ## Do not
 - Do not select a `planned` or `later` option, and do not silently substitute another option; explain and stop.
-- Do not guess a port, health path, app kind, resource name, tracker site or project key that the explore agent or the user did not confirm; the example config is not a source of values.
+- Do not guess a port, app kind, resource name, tracker site or project key that the explore agent or the user did not confirm; the example config is not a source of values. A **missing health route is not a missing value when the framework is recognised** (`delivery-knowledge/references/health-route.md`): set `health_path: /health` and add the route from that reference in the same change (execute sub-agent; attended: show it and ask before writing, `--yes`: write it); it reads `VERSION` at request time and lands in the pull request for review. Only an unrecognised framework stops with the health path as a missing value.
 - Do not hand-write or patch generated files; do not edit `options.yaml`, the schema or templates from a target repo.
 - Do not commit, push, apply infrastructure, build or push images here; those are separate skills with their own guards.
 - Do not put subscription ids, tenant ids, tokens or secrets into `.slipway/config.yaml` when the repo is public unless the user explicitly asks.
