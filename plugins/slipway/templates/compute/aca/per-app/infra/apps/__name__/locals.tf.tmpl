@@ -7,8 +7,10 @@ locals {
   resource_group_name = "<% azure.resource_group %>"
   acr_name            = "<% azure.acr_name %>"
   key_vault_name      = "<% azure.key_vault_name %>"
-  identity_name       = "<% azure.identity_name %>"
-  cae_name            = "cae-<% project.name %>-<% derived.env %>"
+<%#eq options.identity_scope "shared"%>  identity_name       = "<% azure.identity_name %>"
+<%else%>  app_identity_name   = "<% app.identity_name_app %>" # one identity per app (options.identity_scope: per-app)
+<%/eq%>  cae_name            = "<% derived.cae_name %>"
+  container_app_name  = "<% app.container_app_name %>"<%#if derived.platform_shared%> # namespaced by project: the environment is shared by several repositories<%/if%>
 
   tags = {
     project     = local.project

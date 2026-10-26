@@ -437,6 +437,33 @@ test("tracker_transport: mcp (default) renders no tracker workflow, no Jira step
   assert.equal(r4.status, 1); assert.match(r4.stderr, /tracker_transport=rest needs options\.tracker=jira/);
 });
 
+test("platform_scope=shared: no foundation, no setup-azure, namespaced container apps and secrets, per-app identity with scoped roles", () => {
+  const shared = (c) => { c.options.platform_scope = "shared"; c.options.registry_scope = "existing"; c.azure.acr_resource_group = "rg-platform-dev"; c.azure.container_app_environment = "cae-platform-dev"; c.apps[0].secrets = [{ name: "database-url", env: "DATABASE_URL" }]; };
+  const repo = mkRepo(shared);
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.ok(!exists(repo, "infra/foundation"), "no foundation layer on the shared platform"); assert.ok(!exists(repo, ".slipway/setup-azure.sh"), "no setup-azure.sh on the shared platform");
+  assert.match(r.stdout, /omit\s+infra\/foundation\/main\.tf \(shared platform/); assert.match(r.stdout, /omit\s+\.slipway\/setup-azure\.sh/);
+  const locals = read(repo, "infra/apps/api/locals.tf"), main = read(repo, "infra/apps/api/main.tf"), data = read(repo, "infra/apps/api/data.tf"), identity = read(repo, "infra/apps/api/identity.tf");
+  assert.match(locals, /cae_name\s+= "cae-platform-dev"/); assert.match(locals, /container_app_name\s+= "adlc-demo-api"/); assert.match(locals, /app_identity_name\s+= "id-adlc-demo-api"/); assert.doesNotMatch(locals, /^\s+identity_name\s+=/m, "no shared identity name with identity_scope=per-app");
+  assert.match(main, /name\s+= local\.container_app_name/); assert.match(main, /identity_ids = \[local\.app_identity_id\]/); assert.match(main, /secrets\/adlc-demo-database-url"/); assert.match(main, /depends_on = \[azurerm_role_assignment\.app_acr_pull, azurerm_role_assignment\.app_kv_secret\]/);
+  assert.doesNotMatch(data, /data "azurerm_user_assigned_identity"/, "no shared identity lookup with identity_scope=per-app");
+  assert.match(identity, /resource "azurerm_user_assigned_identity" "app"/); assert.match(identity, /role_definition_name = "AcrPull"/); assert.match(identity, /for_each\s+= toset\(\["adlc-demo-database-url", \]\)/); assert.match(identity, /secrets\/\$\{each\.value\}/);
+  const web = read(repo, "infra/apps/web/locals.tf"); assert.match(web, /container_app_name\s+= "adlc-demo-web"/);
+  const webMain = read(repo, "infra/apps/web/main.tf"); assert.match(webMain, /depends_on = \[azurerm_role_assignment\.app_acr_pull, azurerm_role_assignment\.app_kv_secret\]/, "a for_each over no secrets is an empty resource, still a valid dependency");
+  assert.match(read(repo, "AGENTS.md"), /no `infra\/foundation\/`/); assert.match(read(repo, ".slipway/SETUP.md"), /platform owner, once/); assert.doesNotMatch(read(repo, ".slipway/SETUP.md"), /setup-azure\.sh --apply/);
+  assert.match(read(repo, ".claude/rules/terraform.md"), /One layer here/); assert.match(read(repo, "CLAUDE.md"), /foundation belongs to the shared organisation platform/);
+  for (const f of ["infra/apps/api/main.tf", "infra/apps/api/identity.tf", "AGENTS.md", ".slipway/SETUP.md"]) assert.doesNotMatch(read(repo, f), /<%/, `unrendered placeholder in ${f}`);
+  tfCheck(path.join(repo, "infra", "apps", "api"));
+  // the default output is unchanged: no identity.tf, shared identity lookup, plain names
+  const def = mkRepo(); assert.equal(run(["--repo", def], def).status, 0);
+  assert.ok(!exists(def, "infra/apps/api/identity.tf"), "identity.tf renders empty and is omitted with identity_scope=shared");
+  assert.match(read(def, "infra/apps/api/data.tf"), /data "azurerm_user_assigned_identity" "apps"/); assert.match(read(def, "infra/apps/api/locals.tf"), /container_app_name\s+= "api"/); assert.match(read(def, "infra/apps/api/locals.tf"), /cae_name\s+= "cae-adlc-demo-dev"/);
+  assert.ok(exists(def, "infra/foundation/main.tf")); assert.ok(exists(def, ".slipway/setup-azure.sh"));
+  // validation
+  const bad1 = mkRepo((c) => { c.options.platform_scope = "shared"; c.azure.container_app_environment = "cae-platform-dev"; }); const b1 = run(["--repo", bad1], bad1); assert.equal(b1.status, 1); assert.match(b1.stderr, /needs options\.registry_scope=existing/);
+  const bad2 = mkRepo((c) => { c.options.platform_scope = "shared"; c.options.registry_scope = "existing"; }); const b2 = run(["--repo", bad2], bad2); assert.equal(b2.status, 1); assert.match(b2.stderr, /needs azure\.container_app_environment/);
+});
+
 test("cursor cloud environment: environment.json runs the committed install script, pinned to the rendering plugin version", () => {
   const repo = mkRepo();
   const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr + r.stdout);

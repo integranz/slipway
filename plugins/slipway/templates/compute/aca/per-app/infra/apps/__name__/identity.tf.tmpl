@@ -1,0 +1,32 @@
+<%#eq options.identity_scope "per-app"%># Runtime identity of `<% app.name %>` alone (options.identity_scope: per-app): pulls this app's image and reads only this
+# app's secrets. The role assignments need the applier (the CI/CD identity) to hold a conditioned role-assignment right:
+# Role Based Access Control Administrator limited to AcrPull on the registry, Key Vault Data Access Administrator limited to
+# Key Vault Secrets User on the vault (granted once by a subscription Owner; see the platform runbook).
+resource "azurerm_user_assigned_identity" "app" {
+  name                = local.app_identity_name
+  location            = data.azurerm_resource_group.env.location
+  resource_group_name = data.azurerm_resource_group.env.name
+  tags                = local.tags
+}
+
+resource "azurerm_role_assignment" "app_acr_pull" {
+  scope                = data.azurerm_container_registry.this.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+  principal_type       = "ServicePrincipal"
+  description          = "<% app.name %> pulls its images"
+}
+
+resource "azurerm_role_assignment" "app_kv_secret" {
+  for_each             = toset([<%#each app.secrets%>"<% kv_name %>", <%/each%>])
+  scope                = "${data.azurerm_key_vault.this.id}/secrets/${each.value}"
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+  principal_type       = "ServicePrincipal"
+  description          = "<% app.name %> reads its own secret ${each.value}"
+}
+
+locals {
+  app_identity_id = azurerm_user_assigned_identity.app.id
+}
+<%/eq%>

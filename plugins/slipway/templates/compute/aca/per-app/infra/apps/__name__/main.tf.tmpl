@@ -1,8 +1,9 @@
-# App layer for `<% app.name %>`: one container app in the shared environment (infra/foundation). The container app is
-# named exactly after the app so other apps reach it as http://<% app.name %> through the environment proxy.
+# App layer for `<% app.name %>`: one container app in the shared environment (<%#if derived.platform_shared%>the organisation platform<%else%>infra/foundation<%/if%>). Other apps
+# reach it as http://<% app.container_app_name %> through the environment proxy<%#if derived.platform_shared%> (names are prefixed by the project because the environment is
+# shared by several repositories)<%/if%>.
 
 resource "azurerm_container_app" "this" {
-  name                         = "<% app.name %>"
+  name                         = local.container_app_name
   container_app_environment_id = data.azurerm_container_app_environment.this.id
   resource_group_name          = data.azurerm_resource_group.env.name
   revision_mode                = "Single"
@@ -10,20 +11,23 @@ resource "azurerm_container_app" "this" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [data.azurerm_user_assigned_identity.apps.id]
+    identity_ids = [local.app_identity_id]
   }
 
   registry {
     server   = data.azurerm_container_registry.this.login_server
-    identity = data.azurerm_user_assigned_identity.apps.id
+    identity = local.app_identity_id
   }
 <%#each app.secrets%>
   secret {
     name                = "<% name %>"
-    identity            = data.azurerm_user_assigned_identity.apps.id
-    key_vault_secret_id = "${data.azurerm_key_vault.this.vault_uri}secrets/<% name %>"
+    identity            = local.app_identity_id
+    key_vault_secret_id = "${data.azurerm_key_vault.this.vault_uri}secrets/<% kv_name %>"
   }
-<%/each%><%#if app.has_ingress%>
+<%/each%><%#eq options.identity_scope "per-app"%>
+  # the identity must hold its roles before the app pulls its image and resolves its secret references
+  depends_on = [azurerm_role_assignment.app_acr_pull, azurerm_role_assignment.app_kv_secret]
+<%/eq%><%#if app.has_ingress%>
   ingress {
     external_enabled           = <% app.external %>
     target_port                = <% app.port %>

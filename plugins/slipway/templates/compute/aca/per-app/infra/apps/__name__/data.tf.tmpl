@@ -1,4 +1,4 @@
-# Everything below is created by infra/foundation (or setup-azure.sh) and looked up by name.
+# Everything below is created by <%#if derived.platform_shared%>the shared organisation platform (options.platform_scope: shared)<%else%>infra/foundation (or setup-azure.sh)<%/if%> and looked up by name.
 data "azurerm_resource_group" "env" {
   name = local.resource_group_name
 }
@@ -8,11 +8,15 @@ data "azurerm_container_registry" "this" {
   resource_group_name = <%#eq options.registry_scope "existing"%>local.acr_resource_group_name<%else%>local.resource_group_name<%/eq%>
 }
 
-data "azurerm_user_assigned_identity" "apps" {
+<%#eq options.identity_scope "shared"%>data "azurerm_user_assigned_identity" "apps" {
   name                = local.identity_name
   resource_group_name = local.resource_group_name
 }
 
+locals {
+  app_identity_id = data.azurerm_user_assigned_identity.apps.id
+}
+<%/eq%>
 data "azurerm_key_vault" "this" {
   name                = local.key_vault_name
   resource_group_name = local.resource_group_name

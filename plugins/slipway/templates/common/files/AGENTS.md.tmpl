@@ -13,11 +13,14 @@
 | Path | Purpose |
 |---|---|
 | `.slipway/config.yaml` | Delivery options and app inventory (source of truth for every slipway skill) |
-| `.slipway/SETUP.md`, `.slipway/setup-azure.sh` | Prerequisites: what a human does (logins, Docker Hub token, MCP grant) and what `/slipway:launch` automates behind permission prompts (Entra app + OIDC, state storage, RBAC, secrets, environment, ruleset) |
+<%#if derived.platform_shared%>| `.slipway/SETUP.md` | Prerequisites on the shared platform: the organisation platform already provides the registry `<% azure.acr_name %>`, key vault `<% azure.key_vault_name %>`, Container Apps environment `<% derived.cae_name %>`, logs, state storage and the `AZURE_*` organisation secrets; what remains is listed there (secret values, environment approval) |
+<%else%>| `.slipway/SETUP.md`, `.slipway/setup-azure.sh` | Prerequisites: what a human does (logins, Docker Hub token, MCP grant) and what `/slipway:launch` automates behind permission prompts (Entra app + OIDC, state storage, RBAC, secrets, environment, ruleset) |
+<%/if%>
 | `.slipway/.env.example` | Seed file template for local secrets; the copy `.slipway/.env` is gitignored, only ever sourced, never printed |
 <%#eq options.evidence_store "repo"%>| `.slipway/evidence/<app>/` | Verification records per app and deployed tag (committed through pull requests) |
-<%/eq%>| `infra/foundation/` | Shared cloud resources (<%#eq options.registry_scope "existing"%>role assignments on the existing shared registry `<% azure.acr_name %>`<%else%>registry<%/eq%>, key vault, identity, logs<%#eq options.compute "aca"%>, Container Apps environment<%/eq%>). Applied by a human after `/slipway:plan`; never by an agent alone |
-<%#each derived.apps%>| `<% infra_dir %>/` | Compute + image tag of `<% name %>` only (own state). Applied only by `<% workflow_cd %>` behind the environment approval |
+<%/eq%><%#if derived.platform_shared%>| (no `infra/foundation/`) | This repository joins the shared organisation platform (`options.platform_scope: shared`): registry, key vault, Container Apps environment, logs and state storage are owned and applied once by the platform repository; each app below brings its own identity and role assignments |
+<%else%>| `infra/foundation/` | Shared cloud resources (<%#eq options.registry_scope "existing"%>role assignments on the existing shared registry `<% azure.acr_name %>`<%else%>registry<%/eq%>, key vault, identity, logs<%#eq options.compute "aca"%>, Container Apps environment<%/eq%>). Applied by a human after `/slipway:plan`; never by an agent alone |
+<%/if%><%#each derived.apps%>| `<% infra_dir %>/` | Compute + image tag of `<% name %>` only (own state). Applied only by `<% workflow_cd %>` behind the environment approval |
 <%/each%>| `.github/workflows/_ci.yml`, `_cd.yml` | Shared CI / CD stages (`workflow_call`), used by every app's thin workflows below |
 <%#each derived.apps%>| `.github/workflows/<% workflow_ci %>.yml` | CI of `<% name %>`: version from `<% version_file %>`, test, image, tag `<% tag_prefix %><semver>`. Runs only when its inputs change |
 | `.github/workflows/<% workflow_cd %>.yml` | CD of `<% name %>`: plan, human approval, apply `<% infra_dir %>`, smoke test<%#if derived.pipelines.auto_cd%>; starts automatically after a green CI on `<% github.default_branch %>`<%/if%> |
