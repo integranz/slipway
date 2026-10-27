@@ -16,6 +16,8 @@ This repo is the source of the **slipway** plugin (Claude Code and Cursor) and i
 | `plugins/slipway/templates/common/slipway/config.schema.json` | Schema for a target repo's `.slipway/config.yaml` |
 | `docs/` | Evidence documents for the nine goals (catalog, hooks, rules audit, MCP, sub-agents, tiers, clean install, review packet) |
 | `.releaserc.json`, `.github/workflows/release.yml` | This repo versions itself with semantic-release (Conventional Commits) |
+| `.github/workflows/onboard.yml`, `.github/workflows/onboard-poller.yml`, `scripts/onboard-*.cjs` | Headless onboarding of organisation repositories: the poller classifies repositories (one `slipway onboarding` issue per repository as state, welcome issue on an empty one, gates), `onboard.yml` starts one Cursor cloud agent and annotates its PR (`docs/CURSOR-ONBOARDING.md`) |
+| `relay/`, `.github/workflows/relay-deploy.yml` | Cloudflare Worker (free plan): GitHub organisation webhook → one `workflow_dispatch` of `onboard-poller.yml` for the repository the delivery is about; HMAC verify, filter, KV dedupe; tests in `relay/test/`; deployed by the workflow on merge (`relay/README.md`) |
 
 ## I want to…
 - **work on a skill** → `plugins/slipway/skills/<name>/SKILL.md` (Agent Skills format, loaded by Claude Code and Cursor; the frontmatter must be **strict YAML**: quote a `description` that contains `: ` or Cursor drops the skill silently; `npm test` checks); test with `claude --plugin-dir ./plugins/slipway`
