@@ -29,12 +29,36 @@ test("classifier: skips, onboarded, private", () => {
   assert.equal(P.classify(base({ repo: repo({ excluded: true }) })).action, "skip");
   assert.equal(P.classify(base({ repo: repo({ archived: true }) })).action, "skip");
   assert.equal(P.classify(base({ repo: repo({ fork: true }) })).action, "skip");
-  assert.equal(P.classify(base({ head: null })).action, "skip");
+  assert.equal(P.classify(base({ head: null })).action, "welcome", "an empty repository is greeted");
+  assert.equal(P.classify(base({ head: null, repo: repo({ fork: true }) })).action, "skip");
+  assert.equal(P.classify(base({ head: null, repo: repo({ private: true }) })).action, "issue-private", "an empty private repository is reported, not greeted");
+  assert.equal(P.classify(base({ head: null, issue: issue([P.LABELS.welcome.name]) })).action, "skip");
+  assert.equal(P.classify(base({ head: null, issue: issue([P.LABELS.welcome.name], { state: "closed" }) })).action, "skip", "a closed welcome never reopens");
   assert.equal(P.classify(base({ configExists: true })).action, "skip");
   assert.equal(P.classify(base({ configExists: true, issue: issue([P.LABELS.onboarding.name]) })).action, "close-issue");
   assert.equal(P.classify(base({ repo: repo({ private: true }) })).action, "issue-private");
   assert.equal(P.classify(base({ repo: repo({ private: true }), issue: issue([P.LABELS.notOnboarded.name]) })).action, "skip", "private reported once");
   assert.equal(P.classify(base({ issue: issue([P.LABELS.notOnboarded.name]) })).action, "close-issue", "public again: close the not-onboarded issue");
+});
+
+test("classifier: the welcome issue continues as the onboarding (or not-deployable) issue on the first push; answers on it are merged", () => {
+  const w = issue([P.LABELS.welcome.name], { created_at: "2026-10-27T08:00:00Z" });
+  const d = P.classify(base({ issue: w })); assert.equal(d.action, "dispatch"); assert.equal(d.relabel, true); assert.equal(d.overrides, undefined); assert.match(d.reason, /first push after the welcome/);
+  const wa = issue([P.LABELS.welcome.name], { created_at: "2026-10-27T08:00:00Z", comments: [{ body: "```answers\napps[0].health_path: /healthz\n```", created_at: "2026-10-27T08:05:00Z" }] });
+  const da = P.classify(base({ issue: wa })); assert.equal(da.action, "dispatch"); assert.match(da.overrides.text, /healthz/);
+  const nd = P.classify(base({ issue: w, tree: ["README.md"] })); assert.equal(nd.action, "issue-not-deployable"); assert.equal(nd.relabel, true);
+  const closed = P.classify(base({ issue: issue([P.LABELS.welcome.name], { state: "closed" }) })); assert.equal(closed.action, "dispatch"); assert.equal(closed.relabel, false, "a closed welcome does not opt out; a fresh onboarding issue is created");
+  const body = P.welcomeBody(repo(), "azure.location: westeurope"); assert.match(body, /## slipway onboarding/); assert.match(body, /first push lands on `main`/); assert.match(body, /azure\.location: westeurope/); assert.match(body, /slipway:welcome at=/); assert.match(body, /package\.json/);
+});
+
+test("automation notify: payload shape and key transports (bearer never puts the key in the URL)", () => {
+  const ctx = base({ issue: { number: 3, state: "open", html_url: "https://github.com/integranz/widgets/issues/3", labels: [] } });
+  const p = P.automationPayload({ action: "dispatch", repo: ctx.repo, ctx, detail: "dispatch → issue #3", source: "relay:push:abc" });
+  assert.equal(p.event, "slipway.onboarding"); assert.equal(p.repository, "integranz/widgets"); assert.equal(p.issue_url, "https://github.com/integranz/widgets/issues/3"); assert.deepEqual(p.detected, ["package.json"]); assert.equal(p.source, "relay:push:abc"); assert.ok(p.at);
+  const b = P.automationRequest({ url: "https://hooks.example/x", key: "k1", transport: undefined, payload: p }); assert.equal(b.href, "https://hooks.example/x"); assert.equal(b.init.headers.Authorization, "Bearer k1"); assert.equal(JSON.parse(b.init.body).action, "dispatch");
+  const h = P.automationRequest({ url: "https://hooks.example/x", key: "k1", transport: "header:X-API-Key", payload: p }); assert.equal(h.init.headers["X-API-Key"], "k1"); assert.equal(h.init.headers.Authorization, undefined);
+  const q = P.automationRequest({ url: "https://hooks.example/x", key: "k1", transport: "query:api_key", payload: p }); assert.equal(q.href, "https://hooks.example/x?api_key=k1"); assert.equal(q.init.headers.Authorization, undefined);
+  assert.throws(() => P.automationRequest({ url: "https://hooks.example/x", key: "k1", transport: "magic", payload: p }), /unknown CURSOR_AUTOMATION_KEY_TRANSPORT/);
 });
 
 test("classifier: new repositories dispatch or get a not-deployable issue; not-deployable is re-checked on a new head", () => {
@@ -101,11 +125,12 @@ test("GitHub gates at dispatch: environment body, pull-request-only ruleset, pla
 
 test("onboard-poller.yml: schedule off the hour, dispatch permission, concurrency, no input interpolation in run blocks", () => {
   const wf = yaml.load(fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "onboard-poller.yml"), "utf8"));
-  assert.equal(wf.on.schedule[0].cron, "7,22,37,52 * * * *"); assert.deepEqual(Object.keys(wf.on.workflow_dispatch.inputs).sort(), ["dry_run", "repository"]);
+  assert.equal(wf.on.schedule[0].cron, "7,22,37,52 * * * *"); assert.deepEqual(Object.keys(wf.on.workflow_dispatch.inputs).sort(), ["dry_run", "repository", "source"]);
   assert.deepEqual(wf.on.workflow_run, { workflows: ["onboard"], types: ["completed"] }, "a tick follows every onboarding run");
   assert.equal(wf.permissions.actions, "write"); assert.equal(wf.permissions.contents, "read"); assert.equal(wf.concurrency.group, "onboard-poller");
   const runs = wf.jobs.tick.steps.filter((s) => s.run).map((s) => s.run).join("\n");
   assert.equal((runs.match(/\$\{\{\s*inputs\./g) || []).length, 0); assert.match(runs, /onboard-poller\.cjs/);
   const step = wf.jobs.tick.steps.find((s) => s.name === "Poll the organisation");
   assert.ok(step.env.ONBOARD_GITHUB_TOKEN.includes("secrets.ONBOARD_GITHUB_TOKEN")); assert.ok(step.env.ONBOARD_ANSWERS_TEMPLATE.includes("vars.ONBOARD_ANSWERS_TEMPLATE")); assert.ok(step.env.GITHUB_TOKEN.includes("github.token")); assert.ok(step.env.ONBOARD_REVIEWERS.includes("vars.ONBOARD_REVIEWERS"));
+  assert.ok(step.env.ONBOARD_SOURCE.includes("inputs.source")); assert.ok(step.env.CURSOR_AUTOMATION_WEBHOOK_URL.includes("vars.CURSOR_AUTOMATION_WEBHOOK_URL")); assert.ok(step.env.CURSOR_AUTOMATION_WEBHOOK_KEY.includes("secrets.CURSOR_AUTOMATION_WEBHOOK_KEY")); assert.ok(step.env.CURSOR_AUTOMATION_KEY_TRANSPORT.includes("vars.CURSOR_AUTOMATION_KEY_TRANSPORT"));
 });
