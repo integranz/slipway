@@ -207,6 +207,8 @@ This is the automation for "I have a repository with code, make it deployable." 
 
 **Fully automatic variant.** Once the owner sets the repository variable `ONBOARD_ANSWERS_TEMPLATE` (the answers above with `<name>` in place of the repository name), the scheduled poller does step 2 for you: every 15 minutes it looks at the organisation's repositories, and a new public repository with a `package.json`, `Dockerfile`, `*.csproj` or similar manifest gets an issue `slipway onboarding` plus the dispatch; a repository without deployable code gets the same issue explaining why not, and is re-checked on its next push. Steps 3 to 5 stay the same. When the agent stops because a value is missing (for example a backend address another repository owns), its report appears on that issue; answer by commenting a fenced block tagged `answers` with the missing lines, and the next tick retries.
 
+**Instant variant.** The poller's schedule is best-effort (GitHub may wait hours between ticks). With the relay (`relay/`, a free Cloudflare Worker deployed by `relay-deploy.yml`) an organisation webhook calls the poller for the one repository that changed: `gh repo create <org>/<name> --public` gets its welcome issue (what to push, the answers the organisation provides) within about a minute, and the first push with a manifest gets the gates and the agent within another. Six owner steps, listed under "Instant trigger" in `docs/CURSOR-ONBOARDING.md`; the schedule stays on as the backstop. The full demo script with timings and fallbacks is `docs/DEMO.md`.
+
 Details, first-run checks and the exact prompt: `docs/CURSOR-ONBOARDING.md`.
 
 ---
