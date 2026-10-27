@@ -118,10 +118,19 @@ if $GRANT; then
   say "6. Conditioned role-assignment grants for per-app identities (needs the registry and the vault: apply infra/foundation first)"
   az acr show -n "$ACR" -g "$ACR_RG" >/dev/null 2>&1 || { echo "  FAIL  registry $ACR not found in $ACR_RG; apply infra/foundation first" >&2; exit 1; }
   az keyvault show -n "$KV" -g "$RG" >/dev/null 2>&1 || { echo "  FAIL  key vault $KV not found in $RG; apply infra/foundation first" >&2; exit 1; }
-  if has_role "$UAMI_PID" "Role Based Access Control Administrator" "$ACR_SCOPE"; then ok "cicd identity: RBAC Administrator on the registry (AcrPull only)"
-  else todo "cicd identity: Role Based Access Control Administrator on the registry, condition: AcrPull only"; run az role assignment create --assignee-object-id "$UAMI_PID" --assignee-principal-type ServicePrincipal --role "Role Based Access Control Administrator" --scope "$ACR_SCOPE" --condition "$COND_ACR" --condition-version "2.0" -o none; fi
-  if has_role "$UAMI_PID" "Key Vault Data Access Administrator" "$KV_SCOPE"; then ok "cicd identity: Key Vault Data Access Administrator on the vault (Secrets User only)"
-  else todo "cicd identity: Key Vault Data Access Administrator on the vault, condition: Key Vault Secrets User only"; run az role assignment create --assignee-object-id "$UAMI_PID" --assignee-principal-type ServicePrincipal --role "Key Vault Data Access Administrator" --scope "$KV_SCOPE" --condition "$COND_KV" --condition-version "2.0" -o none; fi
+  grant() { # role scope condition label  -- each grant on its own: a refused one prints the command for a subscription Owner
+    local role="$1" scope="$2" cond="$3" label="$4"
+    if has_role "$UAMI_PID" "$role" "$scope"; then ok "cicd identity: $role ($label)"; return 0; fi
+    todo "cicd identity: $role on ${scope#/subscriptions/$SUB_ID/}, condition: $label"
+    if az role assignment create --assignee-object-id "$UAMI_PID" --assignee-principal-type ServicePrincipal --role "$role" --scope "$scope" --condition "$cond" --condition-version "2.0" -o none 2>/tmp/slipway-grant.err; then ok "granted"; GRANTED=$((GRANTED+1)); return 0; fi
+    echo "  WARN  refused ($(grep -oE 'AuthorizationFailed|Forbidden|\([A-Za-z]+\)' /tmp/slipway-grant.err | head -1)): your role-assignment right does not cover '$role'. A subscription Owner runs:" >&2
+    printf '        $ az role assignment create --assignee-object-id %s --assignee-principal-type ServicePrincipal --role "%s" --scope "%s" --condition-version 2.0 --condition "%s"\n' "$UAMI_PID" "$role" "$scope" "$cond"
+    PENDING=$((PENDING+1))
+  }
+  GRANTED=0; PENDING=0
+  grant "Role Based Access Control Administrator" "$ACR_SCOPE" "$COND_ACR" "AcrPull only"
+  grant "Key Vault Data Access Administrator"     "$KV_SCOPE"  "$COND_KV"  "Key Vault Secrets User only"
+  [ "$PENDING" = 0 ] || echo "  $PENDING grant(s) pending for a subscription Owner; until then repositories need options.identity_scope: shared (set azure.shared_apps_identity: true in platform.yaml, re-render, apply)."
 else
   say "6. Conditioned grants for per-app identities: run later as a subscription Owner, after infra/foundation is applied"
   printf '  bash setup-platform.sh --grant-per-app-roles\n'

@@ -9,7 +9,8 @@ azure.acr_name: <% azure.registry.name %>
 azure.acr_resource_group: <%#if azure.registry.existing%><%#if azure.registry.resource_group%><% azure.registry.resource_group %><%else%><% azure.resource_group %><%/if%><%else%><% azure.resource_group %><%/if%>
 azure.key_vault_name: <% azure.key_vault_name %>
 azure.container_app_environment: <% azure.container_app_environment %>
-<%#if azure.shared_apps_identity%>azure.identity_name: <% derived.apps_identity_name %>
+<%#if azure.shared_apps_identity%>options.identity_scope: shared
+azure.identity_name: <% derived.apps_identity_name %>
 <%/if%>azure.state.resource_group: <% azure.state.resource_group %>
 azure.state.storage_account: <% azure.state.storage_account %>
 azure.state.container: <% azure.state.container %>
