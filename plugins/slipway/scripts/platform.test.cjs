@@ -31,11 +31,11 @@ test("renders the platform repository: foundation, setup script, organisation te
   const sh = read(dir, "setup-platform.sh");
   assert.match(sh, /GH_ORG="integranz"; GH_ORG_ID="326982263"; GH_BRANCH="main"/); assert.match(sh, /repo:\$\{GH_ORG\}@\$\{GH_ORG_ID\}\/\*:ref:refs\/heads\/\$\{GH_BRANCH\}/); assert.match(sh, /repo:\$\{GH_ORG\}@\$\{GH_ORG_ID\}\/\*:environment:\$\{ENVIRONMENT\}/); assert.match(sh, /repo:\$\{GH_ORG\}\/\*:environment:\$\{ENVIRONMENT\}/); assert.match(sh, /ENVIRONMENT="dev"/);
   assert.match(sh, /claims\['repository_owner_id'\] eq '\$\{GH_ORG_ID\}'/); assert.match(sh, /api-version=\$\{FIC_API\}/); assert.match(sh, /FIC_API="2025-01-31-preview"/);
-  assert.match(sh, /gh secret set AZURE_CLIENT_ID\s+--org "\$GH_ORG" --visibility all/); assert.match(sh, /--condition "\$COND_ACR" --condition-version "2.0"/); assert.match(sh, /7f951dda-4ed3-4680-a7ca-43fe172d538d/); assert.match(sh, /4633458b-17de-408a-b874-0445c86b69e6/);
+  assert.match(sh, /gh secret set AZURE_CLIENT_ID\s+--org "\$GH_ORG" --visibility all/); assert.match(sh, /--condition "\$cond" --condition-version "2.0"/); assert.match(sh, /7f951dda-4ed3-4680-a7ca-43fe172d538d/); assert.match(sh, /4633458b-17de-408a-b874-0445c86b69e6/);
   assert.doesNotMatch(sh, /2e8a6e6a|b1a09054/, "no subscription or tenant id");
   const main = read(dir, "infra/foundation/main.tf"); assert.match(main, /resource "azurerm_container_registry" "this"/); assert.match(main, /data "azurerm_user_assigned_identity" "cicd"/); assert.doesNotMatch(main, /azurerm_user_assigned_identity" "apps"/, "no shared apps identity by default");
   assert.match(read(dir, "infra/foundation/versions.tf"), /key\s+= "slipway\/platform\/dev\.tfstate"/);
-  const tpl = read(dir, "org-defaults.yaml"); assert.match(tpl, /^options\.platform_scope: shared$/m); assert.match(tpl, /^options\.registry_scope: existing$/m); assert.match(tpl, /^azure\.acr_name: acrslipwaydev$/m); assert.match(tpl, /^azure\.acr_resource_group: rg-slipway-dev$/m); assert.match(tpl, /^azure\.container_app_environment: cae-slipway-dev$/m); assert.match(tpl, /^jira\.project_key: DEVOPS$/m); assert.doesNotMatch(tpl, /azure\.identity_name/);
+  const tpl = read(dir, "org-defaults.yaml"); assert.match(tpl, /^options\.platform_scope: shared$/m); assert.match(tpl, /^options\.registry_scope: existing$/m); assert.match(tpl, /^azure\.acr_name: acrslipwaydev$/m); assert.match(tpl, /^azure\.acr_resource_group: rg-slipway-dev$/m); assert.match(tpl, /^azure\.container_app_environment: cae-slipway-dev$/m); assert.match(tpl, /^jira\.project_key: DEVOPS$/m); assert.doesNotMatch(tpl, /azure\.identity_name/); assert.doesNotMatch(tpl, /identity_scope/, "per-app is the default on the shared platform");
   tfCheck(path.join(dir, "infra", "foundation"));
 });
 
@@ -63,6 +63,17 @@ esac
   assert.match(run.stdout, /claims\['sub'\] matches 'repo:integranz@326982263\/\*:ref:refs\/heads\/main' and claims\['repository_owner_id'\] eq '326982263'/);
   assert.doesNotMatch(run.stdout + run.stderr, /unbound variable|command not found/);
   assert.match(run.stdout, /Done \(dry run\)/);
+  // --grant-per-app-roles when the foundation exists but the caller may not assign the registry role: the refused grant
+  // prints the Owner's command, the other grant proceeds, the script exits 0
+  fs.writeFileSync(path.join(bin, "az"), fs.readFileSync(path.join(bin, "az"), "utf8")
+    .replace('"group show"*|"storage account show"*|"identity show"*|"rest --method GET"*|"storage container show"*|"acr show"*|"keyvault show"*) exit 1;;',
+             '"identity show"*"--query principalId"*) echo 00000000-0000-0000-0000-000000000009;;\n  "role assignment create"*"Role Based Access Control Administrator"*) echo "AuthorizationFailed" >&2; exit 1;;\n  "group show"*|"storage account show"*|"identity show"*|"rest --method GET"*|"storage container show"*) exit 1;;'));
+  const grant = spawnSync("bash", ["setup-platform.sh", "--grant-per-app-roles"], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+  assert.equal(grant.status, 0, grant.stdout + grant.stderr);
+  assert.match(grant.stderr, /refused \(AuthorizationFailed\): your role-assignment right does not cover 'Role Based Access Control Administrator'/);
+  assert.match(grant.stdout, /\$ az role assignment create --assignee-object-id 00000000-0000-0000-0000-000000000009 --assignee-principal-type ServicePrincipal --role "Role Based Access Control Administrator" --scope .*registries\/acrslipwaydev" --condition-version 2.0 --condition "\(\(!\(ActionMatches/);
+  assert.match(grant.stdout, /Key Vault Data Access Administrator on .*vaults\/kv-slipway-dev, condition: Key Vault Secrets User only\n  ok    granted/);
+  assert.match(grant.stdout, /1 grant\(s\) pending for a subscription Owner/);
 });
 
 test("existing registry and shared apps identity variants; re-render skips existing files unless --force", () => {
@@ -70,7 +81,7 @@ test("existing registry and shared apps identity variants; re-render skips exist
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const main = read(dir, "infra/foundation/main.tf"); assert.match(main, /data "azurerm_container_registry" "this"/); assert.doesNotMatch(main, /resource "azurerm_container_registry"/); assert.match(main, /"cicd_acr_reader"/); assert.match(main, /resource "azurerm_user_assigned_identity" "apps"/);
   assert.match(read(dir, "infra/foundation/locals.tf"), /acr_resource_group_name = "rg-taskflow-dev"/);
-  const tpl = read(dir, "org-defaults.yaml"); assert.match(tpl, /^azure\.acr_resource_group: rg-taskflow-dev$/m); assert.match(tpl, /^azure\.identity_name: id-slipway-apps-dev$/m); assert.doesNotMatch(tpl, /jira/);
+  const tpl = read(dir, "org-defaults.yaml"); assert.match(tpl, /^azure\.acr_resource_group: rg-taskflow-dev$/m); assert.match(tpl, /^azure\.identity_name: id-slipway-apps-dev$/m); assert.match(tpl, /^options\.identity_scope: shared$/m, "repositories must use the shared identity when the platform offers one"); assert.doesNotMatch(tpl, /jira/);
   assert.match(read(dir, "setup-platform.sh"), /ACR_RG="rg-taskflow-dev"/);
   const again = spawnSync("node", [SCRIPT, "render", "--config", path.join(dir, "platform.yaml"), "--out", dir], { encoding: "utf8" }); assert.equal(again.status, 0); assert.match(again.stdout, /skip\s+README\.md/); assert.match(again.stdout, /0 written/);
   tfCheck(path.join(dir, "infra", "foundation"));
