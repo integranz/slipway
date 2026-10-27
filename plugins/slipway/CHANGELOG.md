@@ -1,3 +1,9 @@
+## [1.12.1](https://github.com/integranz/slipway/compare/v1.12.0...v1.12.1) (2026-10-27)
+
+### Bug Fixes
+
+* **platform:** each conditioned grant stands alone and prints the Owner's command when refused; template selects identity_scope shared with a shared apps identity ([#40](https://github.com/integranz/slipway/issues/40)) ([9ec7af7](https://github.com/integranz/slipway/commit/9ec7af75e5832d634c83b6c0101e1ccfaec54c76))
+
 ## [1.12.0](https://github.com/integranz/slipway/compare/v1.11.0...v1.12.0) (2026-10-26)
 
 ### Features
