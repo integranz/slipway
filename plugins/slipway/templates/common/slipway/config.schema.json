@@ -484,8 +484,8 @@
                 },
                 "env": {
                   "type": "string",
-                  "pattern": "^[A-Z][A-Z0-9_]*$",
-                  "description": "Environment variable name in the container"
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "description": "Environment variable name in the container: letters, digits and underscores, not starting with a digit. UPPER_CASE by convention; .NET configuration sections use Section__Key (e.g. ConnectionStrings__Sql)."
                 }
               }
             }
@@ -496,9 +496,9 @@
               "type": "string"
             },
             "propertyNames": {
-              "pattern": "^[A-Z][A-Z0-9_]*$"
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
             },
-            "description": "Non-secret environment variables"
+            "description": "Non-secret environment variables. Names: letters, digits and underscores, not starting with a digit; UPPER_CASE by convention, .NET configuration sections as Section__Key (e.g. Database__CreateIfMissing)."
           },
           "resources": {
             "type": "object",
@@ -578,7 +578,7 @@
                     "type": "string"
                   },
                   "propertyNames": {
-                    "pattern": "^[A-Z][A-Z0-9_]*$"
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
                   }
                 },
                 "health_cmd": {
@@ -594,7 +594,7 @@
               "type": "string"
             },
             "propertyNames": {
-              "pattern": "^[A-Z][A-Z0-9_]*$"
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
             },
             "description": "Environment variables for the test step in CI (non-secret; e.g. DATABASE_URL pointing at a test service)."
           }
