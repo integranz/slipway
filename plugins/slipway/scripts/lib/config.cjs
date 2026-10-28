@@ -208,6 +208,7 @@ function derive(config, options, repoRoot) {
     const isNeg = (p) => p.startsWith("!");
     const triggerPaths = atRoot ? ["**", "!.slipway/**", "!**/*.md", `!${LOCK_FILES}`]
       : pipelinePaths.map(p => isNeg(p) ? p : (isFilePath(repoRoot, p) ? p : `${p}/**`));
+    const minReplicas = (a.scale && a.scale.min !== undefined) ? a.scale.min : 1;
     const pathFilters = atRoot ? [".", ":!/.slipway", ":!**/*.md", `:!${LOCK_FILES}`]
       : pipelinePaths.map(p => isNeg(p) ? `:!${p.slice(1)}` : `/${p}`);
     return { ...a, path: appPath, image: `${registryHost}/${a.image_repository}`, image_local: `${config.project.name}/${a.name}`, local_port: 8080 + i,
@@ -219,7 +220,8 @@ function derive(config, options, repoRoot) {
       secrets: (a.secrets || []).map(s => ({ ...s, kv_name: kvSecretName(s.name) })), env_list: Object.entries(a.env || {}).map(([k, v]) => ({ name: k, value: v })),
       container_app_name: containerAppName(a.name), identity_name_app: `id-${config.project.name}-${a.name}`,
       cpu: (a.resources && a.resources.cpu) || 0.25, memory: (a.resources && a.resources.memory) || "0.5Gi",
-      min_replicas: (a.scale && a.scale.min !== undefined) ? a.scale.min : 1, max_replicas: (a.scale && a.scale.max) || 2,
+      // a worker has no scale rule, so more than one replica would only duplicate its work: max follows min unless set
+      min_replicas: minReplicas, max_replicas: (a.scale && a.scale.max) || (a.kind === "worker" ? Math.max(1, minReplicas) : 2),
       upstream_names: a.upstreams || [],
       build, upstream_list: upstreams, primary_upstream: upstreams[0] || null,
       // per-app delivery
