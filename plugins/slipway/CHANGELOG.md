@@ -1,3 +1,9 @@
+## [1.15.1](https://github.com/integranz/slipway/compare/v1.15.0...v1.15.1) (2026-10-28)
+
+### Bug Fixes
+
+* **schema:** accept .NET Section__Key environment variable names ([#45](https://github.com/integranz/slipway/issues/45)) ([b27840c](https://github.com/integranz/slipway/commit/b27840cf95e23edfd0744d0e41b108a3d884ef94))
+
 ## [1.15.0](https://github.com/integranz/slipway/compare/v1.14.0...v1.15.0) (2026-10-28)
 
 ### Features
