@@ -479,3 +479,23 @@ test("cursor cloud environment: environment.json runs the committed install scri
   const syntax = spawnSync("bash", ["-n", path.join(repo, ".slipway/cursor-install.sh")], { encoding: "utf8" }); assert.equal(syntax.status, 0, syntax.stderr);
   const agents = read(repo, "AGENTS.md"); assert.match(agents, /## Cursor Cloud/); assert.ok(agents.includes(`installs the slipway plugin ${version} into`), "AGENTS.md Cursor Cloud section must name the plugin version");
 });
+
+test("env names: .NET Section__Key names validate and render verbatim; names that are not POSIX identifiers are rejected", () => {
+  const repo = mkRepo(c => {
+    c.apps[0].env = { Database__CreateIfMissing: "false", ASPNETCORE_ENVIRONMENT: "Production" };
+    c.apps[0].secrets = [{ name: "sql-connection-string", env: "ConnectionStrings__Sql" }];
+    c.apps[0].test_env = { Chaos__ShareAuthFailure: "false" };
+  });
+  const v = validate(path.join(repo, ".slipway", "config.yaml")); assert.equal(v.status, 0, v.stderr);
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
+  const main = read(repo, "infra/apps/api/main.tf");
+  assert.match(main, /name\s+= "Database__CreateIfMissing"/, "mixed-case env names reach the container app verbatim");
+  assert.match(main, /name\s+= "ConnectionStrings__Sql"\s+secret_name\s+= "sql-connection-string"/, "a secret may be exposed under a .NET section name");
+  const ci = yaml.load(read(repo, ".github/workflows/slipway-demo-api-ci.yml")); assert.equal(ci.jobs.test.env.Chaos__ShareAuthFailure, "false");
+  for (const bad of ["1BAD", "WITH-DASH", "has space", "DOT.TED"]) {
+    const b = mkRepo(c => { c.apps[0].env = { [bad]: "x" }; });
+    const vb = validate(path.join(b, ".slipway", "config.yaml")); assert.notEqual(vb.status, 0, `${bad} must be rejected`); assert.match(vb.stdout + vb.stderr, /env|pattern/);
+  }
+  const badSecret = mkRepo(c => { c.apps[0].secrets = [{ name: "x", env: "9_LIVES" }]; });
+  assert.notEqual(validate(path.join(badSecret, ".slipway", "config.yaml")).status, 0, "a secret env name starting with a digit is rejected");
+});
