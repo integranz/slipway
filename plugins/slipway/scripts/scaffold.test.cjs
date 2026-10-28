@@ -527,3 +527,18 @@ test("CD hardening: bash pipefail, Key Vault pre-check, lock file with the plan,
   const vz = validate(path.join(zero, ".slipway", "config.yaml")); assert.notEqual(vz.status, 0); assert.match(vz.stdout + vz.stderr, /never scale back up/);
   const inverted = mkRepo(c => { c.apps[0].scale = { min: 2, max: 1 }; }); const vi = validate(path.join(inverted, ".slipway", "config.yaml")); assert.notEqual(vi.status, 0); assert.match(vi.stdout + vi.stderr, /below min/);
 });
+
+test("secrets[].note: SETUP.md and .env.example point at the human procedure instead of the seed file; probe comment is generic", () => {
+  const repo = mkRepo(c => { c.apps[0].secrets = [
+    { name: "sql-app-connection-string", env: "CONNECTIONSTRINGS__SQL", note: "created by infra/database/scripts/create-app-user.sh (least-privilege login); never the admin string" },
+    { name: "api-key", env: "API_KEY" }]; });
+  const v = validate(path.join(repo, ".slipway", "config.yaml")); assert.equal(v.status, 0, v.stderr);
+  const r = run(["--repo", repo], repo); assert.equal(r.status, 0, r.stderr);
+  const setup = read(repo, ".slipway/SETUP.md"); const seed = read(repo, ".slipway/.env.example");
+  const noted = setup.split("\n").find(l => l.includes("`sql-app-connection-string`")); const plain = setup.split("\n").find(l => l.includes("`api-key`"));
+  assert.match(noted, /created by infra\/database\/scripts\/create-app-user\.sh/); assert.match(noted, /fallback only/); assert.doesNotMatch(noted, /put `CONNECTIONSTRINGS__SQL=…` in `\.slipway\/\.env`/);
+  assert.match(plain, /put `API_KEY=…` in `\.slipway\/\.env`/); assert.match(plain, /the CD plan checks it/);
+  assert.match(seed, /^# CONNECTIONSTRINGS__SQL \(`sql-app-connection-string`\): created by .*Not set from this file\.$/m); assert.doesNotMatch(seed, /^CONNECTIONSTRINGS__SQL=/m); assert.match(seed, /^API_KEY=$/m);
+  const main = read(repo, "infra/apps/api/main.tf"); assert.match(main, /cold start, image pull, a slow dependency/); assert.doesNotMatch(main, /schema applied on start-up/);
+  const bad = mkRepo(c => { c.apps[0].secrets = [{ name: "x", env: "X", note: "no" }]; }); assert.notEqual(validate(path.join(bad, ".slipway", "config.yaml")).status, 0, "a note shorter than three characters is rejected");
+});
