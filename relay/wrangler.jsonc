@@ -1,0 +1,25 @@
+// slipway relay — Cloudflare Worker configuration (developers.cloudflare.com/workers/wrangler/configuration).
+// Deployed by .github/workflows/relay-deploy.yml on merge to main (cloudflare/wrangler-action), or by hand with
+// `npx wrangler@4 deploy` from this folder. The account id is NOT in this file: wrangler-action receives it as
+// CLOUDFLARE_ACCOUNT_ID; locally `wrangler login` provides it.
+{
+  "name": "slipway-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  // Dedupe of GitHub deliveries (X-GitHub-Delivery, 24 h). Create once: `npx wrangler@4 kv namespace create DEDUPE`
+  // and paste the printed id below (an identifier without rights; the free plan allows 1,000 writes/day, the relay
+  // writes one key per forwarded delivery).
+  "kv_namespaces": [{ "binding": "DEDUPE", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }],
+  // Non-secret settings. Secrets are set with `npx wrangler@4 secret put <NAME>`:
+  //   GITHUB_WEBHOOK_SECRET  (the same value as on the GitHub organisation webhook)
+  //   GITHUB_DISPATCH_TOKEN  (fine-grained PAT: repository access = the dispatch repository only; Actions: read and write)
+  "vars": {
+    "GITHUB_DISPATCH_REPO": "integranz/slipway",
+    "GITHUB_DISPATCH_WORKFLOW": "onboard-poller.yml",
+    "GITHUB_DISPATCH_REF": "main",
+    "EXCLUDE_REPOS": "integranz/slipway-platform",
+    "FORWARD_PRIVATE_PUSHES": "false"
+  }
+}

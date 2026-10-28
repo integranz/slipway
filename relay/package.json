@@ -1,0 +1,12 @@
+{
+  "name": "slipway-relay",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker: GitHub organisation webhook -> one workflow_dispatch of the slipway onboarding poller",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev": "npx wrangler@4 dev",
+    "deploy": "npx wrangler@4 deploy",
+    "tail": "npx wrangler@4 tail slipway-relay --format pretty"
+  }
+}

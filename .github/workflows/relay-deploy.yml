@@ -1,0 +1,78 @@
+# Tests and deploys the slipway relay (relay/, a Cloudflare Worker) — runbook: relay/README.md and docs/CURSOR-ONBOARDING.md.
+# Pull requests: unit tests + a credential-free `wrangler deploy --dry-run`. Merge to main touching relay/**: the same, then
+# the deploy with cloudflare/wrangler-action using the repository secrets CLOUDFLARE_API_TOKEN (Cloudflare template "Edit
+# Cloudflare Workers") and CLOUDFLARE_ACCOUNT_ID; while those secrets are absent the deploy job skips with a notice instead
+# of failing. Worker secrets (GITHUB_WEBHOOK_SECRET, GITHUB_DISPATCH_TOKEN) are set once by hand with `wrangler secret put`
+# and are never touched here.
+name: relay-deploy
+on:
+  pull_request:
+    paths: [relay/**, .github/workflows/relay-deploy.yml]
+  push:
+    branches: [main]
+    paths: [relay/**, .github/workflows/relay-deploy.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: relay-deploy
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests
+        run: node --test relay/test/*.test.js
+      - name: Configuration dry run (no credentials)
+        working-directory: relay
+        run: |
+          if grep -q REPLACE_WITH_KV_NAMESPACE_ID wrangler.jsonc; then
+            echo "::notice::KV namespace id not set yet (wrangler.jsonc placeholder); the wrangler dry run is skipped"
+            exit 0
+          fi
+          npx --yes wrangler@4 deploy --dry-run --outdir /tmp/relay-dry
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight
+        id: pre
+        env:
+          CF_TOKEN_SET: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          CF_ACCOUNT_SET: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          if [ "$CF_TOKEN_SET" != "true" ] || [ "$CF_ACCOUNT_SET" != "true" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not set on this repository; deploy skipped (see relay/README.md)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif grep -q REPLACE_WITH_KV_NAMESPACE_ID relay/wrangler.jsonc; then
+            echo "::notice::relay/wrangler.jsonc still carries the KV namespace placeholder; deploy skipped"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy with wrangler
+        if: steps.pre.outputs.skip != 'true'
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: relay
+          command: deploy
+      - name: Health check
+        if: steps.pre.outputs.skip != 'true'
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          if [ -z "$URL" ]; then echo "::notice::wrangler-action returned no deployment-url; check the Worker in the Cloudflare dashboard"; exit 0; fi
+          code="$(curl -sS -o /dev/null -w '%{http_code}' "$URL/healthz")"
+          echo "GET $URL/healthz -> $code"
+          echo "### slipway-relay deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: $URL (health $code)" >> "$GITHUB_STEP_SUMMARY"
+          [ "$code" = "200" ]
