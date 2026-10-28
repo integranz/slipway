@@ -41,3 +41,47 @@ Keep it under 30 lines. If the diff touches only .slipway/evidence/*.md, reply w
 - PR: https://github.com/integranz/slipway-demo/pull/3 (`docs(readme): point to AGENTS.md and the verification evidence`, one hand-written file)
 - Review: https://github.com/integranz/slipway-demo/pull/3#pullrequestreview-5228208563 by `cursor[bot]`, 2026-09-16T20:54:07Z, about one minute after the PR opened. Verdict: "No rule violations", documentation-only.
 - The check name on the PR still reads "Cursor Automation: adlc-demo PR review"; that is the automation's display name inside Cursor and can be renamed there.
+
+## F1 — webhook trigger feasibility test (owner, before the assistant is built)
+Cursor documents that the Webhook trigger "generates a webhook URL to call and an API key for authentication" (cursor.com/docs/cloud-agent/automations) but not how the key travels nor whether the request body reaches the prompt. The poller (1.13.0) can call such a trigger after a welcome, a dispatch or a not-deployable issue (`CURSOR_AUTOMATION_WEBHOOK_URL`, `CURSOR_AUTOMATION_WEBHOOK_KEY`, `CURSOR_AUTOMATION_KEY_TRANSPORT` = `bearer` | `header:<Name>` | `query:<param>`), so the test decides only the transport value and the prompt style. About one hour.
+
+1. At cursor.com/automations create `slipway-f1-webhook-probe`: trigger **Webhook**, repository **none**, no tools, the cheapest model, run-as decided now (a team service account if the team offers one; switching later regenerates the key). Prompt: "Report everything you know about what triggered this run. Print, verbatim, the values of these placeholders if they exist: `{{payload}}` `{{body}}` `{{webhook.body}}` `{{event}}` `{{trigger}}` `{{input}}`. Then print the value of the field `marker` from the request body, or `marker: not visible`." Save; copy the URL and the key to the clipboard only (never into a file or a chat).
+2. Send three forms with a JSON body `{"marker":"f1-<form>-<time>","repository":"integranz/taskflow-app"}`: **A** `Authorization: Bearer <key>`; **B** the key as a query parameter (`api_key`, then `key`, `token`, `apiKey`; start the command with a space so it stays out of the shell history); **C** a header `X-API-Key`, then `X-Cursor-Api-Key`. Note the HTTP status of each, whether a run appeared, and the latency.
+3. F1b: add the tool **GitHub MCP** and the instruction "comment `F1b probe <marker>` on the issue named in `issue_url` if you can see it, otherwise on `integranz/taskflow-app#2`"; send the working form again. Then send two requests 20 seconds apart: two runs or one?
+4. Record the outcome in the table below; set `CURSOR_AUTOMATION_KEY_TRANSPORT` accordingly.
+
+| Form | HTTP status | Run started | Latency | Transcript shows the body / a placeholder / `marker`? | Run-as identity | Two requests → runs |
+|---|---|---|---|---|---|---|
+| A bearer | pending | | | | | |
+| B query (`api_key` / `key` / `token` / `apiKey`) | pending | | | | | |
+| C header (`X-API-Key` / `X-Cursor-Api-Key`) | pending | | | | | |
+
+Outcomes: **O1** the body is visible → the assistant writes a rich comment from `issue_url`, `action`, `detected`, `run_url`. **O2** triggerable but blind → the prompt finds the newest open `slipway onboarding` issue of the organisation through GitHub MCP search (updated within the last 10 minutes) and comments there. **O3** no transport works → Plan C: an automation on *Workflow run completed* of `onboard` in `integranz/slipway` that summarises the agent's pull request on the issue; the poller variables stay unset. The poller code is identical in O1 and O2.
+
+## Automation 2: `slipway onboarding assistant` (webhook trigger; built after F1)
+| Field | Value |
+|---|---|
+| **Name** | `slipway onboarding assistant` |
+| **Trigger** | Webhook (URL + key from Cursor), called by `onboard-poller.yml` after a welcome, a dispatch, a re-dispatch or a not-deployable issue |
+| **Repository scope** | none (the repository is named in the payload or found through search); Cursor cannot bind an automation to a repository created after it was saved |
+| **Tools** | **GitHub MCP** only (issue comments); no Slack, no secrets, no cloud tools |
+| **Identity** | the run-as account from F1; its comments appear under that login (say so in the demo, or use a scoped Issues-write token in the Cloud Agent Secrets) |
+| **Settings on `integranz/slipway`** | `gh variable set CURSOR_AUTOMATION_WEBHOOK_URL -R integranz/slipway --body "<url>"`, `gh secret set CURSOR_AUTOMATION_WEBHOOK_KEY -R integranz/slipway --body "$(pbpaste)"`, `gh variable set CURSOR_AUTOMATION_KEY_TRANSPORT -R integranz/slipway --body "<bearer|header:<Name>|query:<param>>"` (owner's terminal) |
+| **Output / review path** | one comment on the onboarding issue: what just happened (welcome / dispatched / not deployable), what the human should expect next and when, the links (`run_url`, agent page when the issue names it); never a push, a merge, an approval or a cloud call |
+| **Monitoring** | run history at cursor.com/automations; the comment itself; the poller's `::warning::` when the call fails |
+| **Rollback** | unset `CURSOR_AUTOMATION_WEBHOOK_URL` (the poller stops calling immediately); deactivate the automation |
+
+Prompt (O1; for O2 replace the first line with "Find the newest open issue titled `slipway onboarding` in the organisation `integranz` updated within the last 10 minutes; if none, stop."):
+```
+You receive a JSON payload from the slipway onboarding poller: event, action, repository, issue_url, detected, run_url, source.
+Read the issue at issue_url (its body and the last three comments) with the GitHub tool. Post ONE comment on that issue, under 15 lines:
+- action = welcome: say the repository was noticed while still empty, list in two lines what to push (a manifest such as package.json
+  or *.csproj, a /health route, PORT), and that the first push starts the onboarding automatically.
+- action = dispatch or redispatch: say one cloud agent was started (link run_url), what it will produce (a pull request
+  "slipway: onboard <name>" with .slipway/config.yaml, the per-app CI/CD workflows, the Terraform module, a Dockerfile when needed),
+  what it cannot do (no cloud credential; nothing changes in Azure, GitHub settings or Jira until a human merges), and when to expect it (5-15 minutes).
+- action = issue-not-deployable: repeat the detector's reasons from `detected` in plain words and how to answer (a fenced block tagged `answers` on this issue).
+Never approve, merge, push, edit files, call cloud or Jira tools, or comment anywhere else. If the issue is closed, do nothing.
+```
+
+Proof (pending): automation id, the first run, the comment link, the measured delay between the poller's call and the comment.
