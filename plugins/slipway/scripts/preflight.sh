@@ -62,11 +62,27 @@ if [ -n "$OWNER" ] && [ -n "$REPO_NAME" ] && gh auth status >/dev/null 2>&1; the
   # GitHub Free see organisation secrets; private ones need a paid plan)
   SECRETS="$( { gh secret list -R "$OWNER/$REPO_NAME" --json name --jq '.[].name'; gh api "repos/$OWNER/$REPO_NAME/actions/organization-secrets" --jq '.secrets[].name'; } 2>/dev/null)"
   VARS="$( { gh variable list -R "$OWNER/$REPO_NAME" --json name --jq '.[].name'; gh api "repos/$OWNER/$REPO_NAME/actions/organization-variables" --jq '.variables[].name'; } 2>/dev/null)"
+  # organisation-level secrets need an organisation owner; a member, or a personal account, gets repository-level forms
+  if gh api "users/$OWNER" --jq .type 2>/dev/null | grep -qx Organization; then ORG_ROLE="$(gh api "user/memberships/orgs/$OWNER" --jq .role 2>/dev/null | grep -Ex 'admin|member' || true)"; else ORG_ROLE="personal"; fi
+  case "$ORG_ROLE" in
+    admin)    SEC_FORM="--org $OWNER --visibility all"; ok "secret scope" "organisation owner: shared secrets can be set once for every repository (--org $OWNER --visibility all)";;
+    personal) SEC_FORM="-R $OWNER/$REPO_NAME"; ok "secret scope" "repository-level (personal account $OWNER)";;
+    *)        SEC_FORM="-R $OWNER/$REPO_NAME"; ok "secret scope" "repository-level (${ORG_ROLE:-not a member} of $OWNER: organisation secrets need an owner)";;
+  esac
+  VIS="$(gh api "repos/$OWNER/$REPO_NAME" --jq .visibility 2>/dev/null)"
+  if [ "$VIS" = "private" ] || [ "$VIS" = "internal" ]; then
+    PLAN="$(gh api "orgs/$OWNER" --jq '.plan.name // empty' 2>/dev/null)"
+    case "$PLAN" in
+      free) miss "$VIS repository on GitHub Free" "environment protection rules (required reviewers) are not available on private repositories: make it public or move the organisation to a paid plan";;
+      "")   skip "$VIS repository" "organisation plan not visible to your token; required reviewers on private repositories need a paid plan (the environment check below tells)";;
+      *)    ok "$VIS repository on the GitHub $PLAN plan" "environment protection rules available";;
+    esac
+  fi
   if [ "$PLATFORM" = "shared" ]; then AZ_FIX="organisation secret set once by the platform owner: gh secret set $s --org $OWNER --visibility all"; else AZ_FIX="bash .slipway/setup-azure.sh --apply --set-github-secrets"; fi
   for s in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do printf '%s\n' "$SECRETS" | grep -qx "$s" && ok "secret $s" "repository or organisation" || miss "secret $s" "${AZ_FIX/\$s/$s}"; done
   if [ "$BASE_IMAGE" = "dhi" ]; then
-    printf '%s\n' "$SECRETS" | grep -qx DOCKERHUB_TOKEN && ok "secret DOCKERHUB_TOKEN" "repository or organisation" || miss "secret DOCKERHUB_TOKEN" "once for the organisation: gh secret set DOCKERHUB_TOKEN --org $OWNER --visibility all --body \"\$(pbpaste)\"  (or -R $OWNER/$REPO_NAME for this repository only)"
-    printf '%s\n' "$VARS" | grep -qx DOCKERHUB_USERNAME && ok "variable DOCKERHUB_USERNAME" "repository or organisation" || miss "variable DOCKERHUB_USERNAME" "gh variable set DOCKERHUB_USERNAME --org $OWNER --visibility all --body <username>  (or -R $OWNER/$REPO_NAME)"
+    printf '%s\n' "$SECRETS" | grep -qx DOCKERHUB_TOKEN && ok "secret DOCKERHUB_TOKEN" "repository or organisation" || miss "secret DOCKERHUB_TOKEN" "gh secret set DOCKERHUB_TOKEN $SEC_FORM --body \"\$(pbpaste)\""
+    printf '%s\n' "$VARS" | grep -qx DOCKERHUB_USERNAME && ok "variable DOCKERHUB_USERNAME" "repository or organisation" || miss "variable DOCKERHUB_USERNAME" "gh variable set DOCKERHUB_USERNAME $SEC_FORM --body <username>"
   fi
   ENVJSON="$(gh api "repos/$OWNER/$REPO_NAME/environments/$ENV" 2>/dev/null)"
   if [ -n "$ENVJSON" ]; then

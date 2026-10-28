@@ -13,7 +13,9 @@
 //      event and delivery id; shown in the step summary), CURSOR_AUTOMATION_WEBHOOK_URL / _KEY / _KEY_TRANSPORT (optional
 //      webhook-trigger Cursor Automation notified after a welcome, a dispatch or a not-deployable issue), ONBOARD_ANSWERS_TEMPLATE
 //      (org defaults with <name> placeholders), ONBOARD_EXCLUDE (comma list of owner/name; the poller's own repository is
-//      always excluded), GITHUB_REPOSITORY, GITHUB_STEP_SUMMARY (optional).
+//      always excluded), ONBOARD_PRIVATE_REPOS (auto | onboard | skip: whether private repositories are onboarded; auto reads
+//      the organisation plan once per tick: paid plans have environment protection rules on private repositories, GitHub
+//      Free does not), GITHUB_REPOSITORY, GITHUB_STEP_SUMMARY (optional).
 "use strict";
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -86,6 +88,17 @@ function runEndedMarkers(issue) { return (issue.comments || []).map((c) => marke
 function marker(text, key) { const m = String(text || "").match(new RegExp(`<!-- slipway:${key}((?: [a-z_]+=[^ >]+)*) -->`)); if (!m) return null; const o = {}; for (const kv of m[1].trim().split(/\s+/).filter(Boolean)) { const [k, v] = kv.split("="); o[k] = v; } return o; }
 function dispatchMarkers(issue) { return (issue.comments || []).map((c) => marker(c.body, "dispatched")).filter(Boolean); }
 function hasLabel(issue, name) { return (issue.labels || []).some((l) => (typeof l === "string" ? l : l.name) === name); }
+// Private repositories: GitHub Free has no environment protection rules on them (a deployment would apply without a human
+// approval); paid plans do. `org.plan` is GET /orgs/{org} .plan.name (free | team | business | enterprise; null when the
+// token cannot see it) and `org.privateRepos` is ONBOARD_PRIVATE_REPOS (auto | onboard | skip). Pure.
+function privatePolicy(org = {}) {
+  const mode = String(org.privateRepos || "auto").toLowerCase(); const plan = org.plan ? String(org.plan).toLowerCase() : null;
+  if (mode === "onboard") return { onboard: true, why: "ONBOARD_PRIVATE_REPOS=onboard" };
+  if (mode === "skip") return { onboard: false, why: "ONBOARD_PRIVATE_REPOS=skip" };
+  if (!plan) return { onboard: false, why: "the organisation plan is not visible to the poller's token, and GitHub Free has no environment protection on private repositories (set ONBOARD_PRIVATE_REPOS=onboard on a paid plan)" };
+  if (plan === "free") return { onboard: false, why: "no environment protection rules on private repositories with the GitHub Free plan" };
+  return { onboard: true, why: `GitHub ${plan} plan: environment protection rules apply to private repositories` };
+}
 // Decide what to do for one repository. Inputs are facts; the output is one action with reasons.
 function classify(ctx) {
   const { repo, head, configExists, tree, issue, openOnboardingPr, now = new Date() } = ctx;
@@ -93,8 +106,9 @@ function classify(ctx) {
   if (repo.archived) return { action: "skip", reason: "archived" };
   if (repo.fork) return { action: "skip", reason: "fork" };
   if (configExists) return issue && issue.state === "open" ? { action: "close-issue", reason: ".slipway/config.yaml is on the default branch" } : { action: "skip", reason: "onboarded" };
-  if (repo.private) return issue && hasLabel(issue, LABELS.notOnboarded.name) ? { action: "skip", reason: "private; already reported" } : { action: "issue-private", reason: "private repository: no environment protection on GitHub Free" };
-  if (issue && issue.state === "open" && hasLabel(issue, LABELS.notOnboarded.name)) return { action: "close-issue", reason: "repository is public now; re-evaluating on the next tick" };
+  const priv = repo.private ? privatePolicy(ctx.org) : null;
+  if (priv && !priv.onboard) return issue && hasLabel(issue, LABELS.notOnboarded.name) ? { action: "skip", reason: "private; already reported" } : { action: "issue-private", reason: `private repository: ${priv.why}`, why: priv.why };
+  if (issue && issue.state === "open" && hasLabel(issue, LABELS.notOnboarded.name)) return { action: "close-issue", reason: priv ? `private repositories are onboarded on this plan (${priv.why}); re-evaluating on the next tick` : "repository is public now; re-evaluating on the next tick" };
   if (!head) { // empty default branch: greet once (the instant path reacts to repository.created); a closed welcome never reopens and does not opt out
     if (issue) return { action: "skip", reason: issue.state === "open" && hasLabel(issue, LABELS.welcome.name) ? "welcome posted; waiting for the first push" : "empty repository; an issue exists" };
     return { action: "welcome", reason: "empty repository: welcome issue" };
@@ -144,7 +158,8 @@ async function main() {
   const source = process.env.ONBOARD_SOURCE || ""; const eventName = process.env.GITHUB_EVENT_NAME || "";
   const self = process.env.GITHUB_REPOSITORY || ""; const org = val("--org", process.env.ONBOARD_ORG || self.split("/")[0]);
   const maxDispatches = Number(val("--max-dispatches", process.env.ONBOARD_MAX_DISPATCHES || 2));
-  const only = val("--repo", null);
+  const only = val("--repo", null); const privateRepos = String(val("--private-repos", process.env.ONBOARD_PRIVATE_REPOS || "auto")).toLowerCase();
+  if (!["auto", "onboard", "skip"].includes(privateRepos)) { console.error(`::error::ONBOARD_PRIVATE_REPOS must be auto, onboard or skip (got ${privateRepos})`); process.exit(1); }
   if (!readToken) { console.error("::error::ONBOARD_GITHUB_TOKEN is not set"); process.exit(1); }
   if (!template || !template.trim()) { console.error("::error::ONBOARD_ANSWERS_TEMPLATE is not set (repository variable with the organisation defaults, <name> placeholders)"); process.exit(1); }
   if (!org) { console.error("::error::organisation unknown (--org or GITHUB_REPOSITORY)"); process.exit(1); }
@@ -155,11 +170,14 @@ async function main() {
   const repos = only
     ? [json(gh(readToken, ["api", `repos/${only}`]))].filter((r) => { if (String(r.owner && r.owner.login).toLowerCase() !== org.toLowerCase()) throw new Error(`${only} is not in organisation ${org}`); return true; })
     : json(gh(readToken, ["api", `orgs/${org}/repos?per_page=100&type=all`, "--paginate", "--slurp"])).flat().sort((a, b) => a.name.localeCompare(b.name));
+  // the organisation plan decides whether private repositories can be gated (GET /orgs/{org}; plan hidden from some tokens)
+  let orgInfo = {}; try { orgInfo = json(gh(readToken, ["api", `orgs/${org}`], { ok404: true })) || {}; } catch { orgInfo = {}; }
+  const orgCtx = { plan: orgInfo.plan && orgInfo.plan.name ? orgInfo.plan.name : null, privateRepos }; const privateOk = privatePolicy(orgCtx).onboard;
   const reviewers = DRY ? [] : resolveReviewers(readToken);
   const rows = []; let dispatched = 0;
   for (const r of repos) {
     const full = r.full_name; const repo = { name: r.name, full_name: full, private: !!r.private, archived: !!r.archived, fork: !!r.fork, default_branch: r.default_branch, excluded: exclude.has(full.toLowerCase()) };
-    let ctx = { repo, head: null, configExists: false, tree: [], issue: null, openOnboardingPr: null };
+    let ctx = { repo, head: null, configExists: false, tree: [], issue: null, openOnboardingPr: null, org: orgCtx };
     try {
       if (!repo.excluded && !repo.archived && !repo.fork) {
         const br = json(gh(readToken, ["api", `repos/${full}/branches/${encodeURIComponent(r.default_branch)}`], { ok404: true }));
@@ -169,7 +187,7 @@ async function main() {
         if (ours) { ours.comments = json(gh(readToken, ["api", `repos/${full}/issues/${ours.number}/comments?per_page=100`], { ok404: true })) || []; ctx.issue = ours; }
         if (ctx.head) {
           ctx.configExists = !!gh(readToken, ["api", `repos/${full}/contents/.slipway/config.yaml?ref=${encodeURIComponent(r.default_branch)}`], { ok404: true });
-          if (!ctx.configExists && !repo.private) {
+          if (!ctx.configExists && (!repo.private || privateOk)) {
             const tree = json(gh(readToken, ["api", `repos/${full}/git/trees/${ctx.head}?recursive=1`], { ok404: true }));
             ctx.tree = tree && tree.tree ? tree.tree.filter((t) => t.type === "blob").map((t) => t.path) : [];
             const prs = json(gh(readToken, ["api", `repos/${full}/pulls?state=open&per_page=50`], { ok404: true })) || [];
@@ -189,7 +207,7 @@ async function main() {
   }
   const table = ["| repository | action | detail |", "|---|---|---|", ...rows.map((x) => `| ${x.repo} | ${x.action} | ${x.detail.replace(/\|/g, "\\|")} |`)].join("\n");
   console.log(`onboard poller${DRY ? " (dry run)" : ""}: ${repos.length} repositories, ${dispatched} dispatched\n${table}`);
-  if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## onboard poller${DRY ? " (dry run)" : ""} — ${new Date().toISOString()}${eventName ? ` — ${eventName}` : ""}${only ? ` — repository=${only}` : ""}${source ? ` — source=${source}` : ""}\n\n${table}\n`);
+  if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## onboard poller${DRY ? " (dry run)" : ""} — ${new Date().toISOString()}${eventName ? ` — ${eventName}` : ""}${only ? ` — repository=${only}` : ""}${source ? ` — source=${source}` : ""} — plan=${orgCtx.plan || "unknown"} — private repositories: ${privateOk ? "onboarded" : "reported"}\n\n${table}\n`);
   if (rows.some((x) => x.action === "error")) process.exitCode = 2;
 }
 const p_url = (pr) => pr.html_url;
@@ -263,7 +281,7 @@ function act(full, repo, ctx, d, env) {
   switch (d.action) {
     case "welcome": { ensureLabels(full, readToken); const i = createIssue(full, readToken, welcomeBody(repo, renderAnswers(env.template, repo.name)), LABELS.welcome.name); ctx.issue = i; return `opened welcome issue #${i.number}`; }
     case "close-issue": comment(full, readToken, n, `Closed by the slipway poller: ${d.reason}.`); closeIssue(full, readToken, n); return `closed issue #${n}: ${d.reason}`;
-    case "issue-private": { ensureLabels(full, readToken); const i = createIssue(full, readToken, `## slipway onboarding\n\nThis repository is **private**. On the GitHub Free plan a private repository has no environment protection rules, so a deployment workflow would apply without a human approval. slipway does not onboard it as it is.\n\nOptions: make the repository public, or move the organisation to a paid GitHub plan; the poller re-evaluates when the repository becomes public.\n\n<!-- slipway:not-onboarded reason=private -->`, LABELS.notOnboarded.name); return `opened issue #${i.number} (private repository)`; }
+    case "issue-private": { ensureLabels(full, readToken); const i = createIssue(full, readToken, `## slipway onboarding\n\nThis repository is **private** and slipway does not onboard it as it is: ${d.why}. Without a required reviewer on its deployment environment, a deployment workflow would apply without a human approval.\n\nOptions: make the repository public; move the organisation to a paid GitHub plan (the poller re-evaluates on its own); or, when the plan already supports environment protection on private repositories, set the repository variable \`ONBOARD_PRIVATE_REPOS=onboard\` on the poller's repository.\n\n<!-- slipway:not-onboarded reason=private -->`, LABELS.notOnboarded.name); return `opened issue #${i.number} (private repository)`; }
     case "issue-not-deployable": {
       ensureLabels(full, readToken);
       if (openN && d.relabel) { setLabels(full, readToken, openN, [LABELS.notDeployable.name]); gh(readToken, ["api", "-X", "PATCH", `repos/${full}/issues/${openN}`, "-f", `body=${notDeployableBody(repo, ctx.head, d.detector)}`]); comment(full, readToken, openN, `First push seen at \`${head7}\`: no manifest yet (looked for ${d.detector.lookedFor.join(", ")}). Push one and the next tick onboards this repository.\n\n<!-- slipway:not-deployable head=${ctx.head} -->`); return `welcome issue #${openN} → not deployable at ${head7}`; }
@@ -294,5 +312,5 @@ function welcomeBody(repo, answers) {
 function notDeployableBody(repo, head, det) {
   return `## slipway onboarding\n\nNo deployable application found on \`${repo.default_branch}\` at \`${(head || "").slice(0, 7)}\`. The poller looked for: ${det.lookedFor.join(", ")} (outside node_modules, vendor, dist, build, bin, obj).\n\nPush code with one of those manifests and the next tick (every 15 minutes) re-checks this repository. If the detector is wrong, comment with a fenced block tagged \`answers\` (for example \`apps[0].path: .\` and the app's kind, stack, port and health path): the next tick onboards with it. If this repository is not meant to be deployed, close this issue.\n\n<!-- slipway:not-deployable head=${head} -->`;
 }
-module.exports = { classify, isDeployable, renderAnswers, hyphenSlug, alnumSlug, marker, answersBlocks, latestAnswers, mergeAnswers, environmentBody, prOnlyRuleset, gatesPlan, environmentName, automationPayload, automationRequest, welcomeBody, LABELS, ISSUE_TITLE, MANIFESTS };
+module.exports = { classify, privatePolicy, isDeployable, renderAnswers, hyphenSlug, alnumSlug, marker, answersBlocks, latestAnswers, mergeAnswers, environmentBody, prOnlyRuleset, gatesPlan, environmentName, automationPayload, automationRequest, welcomeBody, LABELS, ISSUE_TITLE, MANIFESTS };
 if (require.main === module) main().catch((e) => { console.error(`::error::${e.message}`); process.exit(1); });

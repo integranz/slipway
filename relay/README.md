@@ -18,7 +18,7 @@ GitHub org webhook (Repositories + Pushes, HMAC secret)
 | 502 | the dispatch call failed (status and GitHub's message in the body and the log; **not** deduped, so *Redeliver* on GitHub retries it) |
 | 500 | misconfigured: a secret or the KV binding is missing |
 
-Forwarded: `repository` with action `created`, `publicized`, `unarchived`, `transferred`; `push` to the default branch of a live, non-fork, public repository (`FORWARD_PRIVATE_PUSHES=true` includes private ones). Never forwarded: the dispatch repository itself and `EXCLUDE_REPOS`.
+Forwarded: `repository` with action `created`, `publicized`, `unarchived`, `transferred`; `push` to the default branch of a live, non-fork, public repository (`FORWARD_PRIVATE_PUSHES=true` includes private ones: set it on a paid GitHub plan, where the poller onboards them; the poller's schedule covers them either way). Never forwarded: the dispatch repository itself and `EXCLUDE_REPOS`.
 
 ## Secrets and variables
 | Name | Where | Value |
