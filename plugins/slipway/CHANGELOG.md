@@ -1,3 +1,9 @@
+## [1.15.0](https://github.com/integranz/slipway/compare/v1.14.0...v1.15.0) (2026-10-28)
+
+### Features
+
+* repository-level secrets by default for non-owners; plan-aware private-repository rule ([#44](https://github.com/integranz/slipway/issues/44)) ([186c93f](https://github.com/integranz/slipway/commit/186c93f8c192967153913644e801333dfa25c138))
+
 ## [1.14.0](https://github.com/integranz/slipway/compare/v1.13.0...v1.14.0) (2026-10-28)
 
 ### Features
