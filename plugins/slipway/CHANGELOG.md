@@ -1,3 +1,9 @@
+## [1.13.0](https://github.com/integranz/slipway/compare/v1.12.1...v1.13.0) (2026-10-28)
+
+### Features
+
+* **poller:** welcome issue on empty repositories, direct --repo lookup, source input, optional Cursor Automation notify ([#41](https://github.com/integranz/slipway/issues/41)) ([b55c10f](https://github.com/integranz/slipway/commit/b55c10f2cb36d414fae4ce73d039ee4c571c9c90))
+
 ## [1.12.1](https://github.com/integranz/slipway/compare/v1.12.0...v1.12.1) (2026-10-27)
 
 ### Bug Fixes
