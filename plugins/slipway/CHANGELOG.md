@@ -1,3 +1,9 @@
+## [1.15.2](https://github.com/integranz/slipway/compare/v1.15.1...v1.15.2) (2026-10-28)
+
+### Bug Fixes
+
+* **templates:** CD hardening from the first external review ([#46](https://github.com/integranz/slipway/issues/46)) ([eecbfdf](https://github.com/integranz/slipway/commit/eecbfdfa51fd01af8f534e8e0a99ad75969a53f1))
+
 ## [1.15.1](https://github.com/integranz/slipway/compare/v1.15.0...v1.15.1) (2026-10-28)
 
 ### Bug Fixes
