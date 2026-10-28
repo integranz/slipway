@@ -1,3 +1,9 @@
+## [1.14.0](https://github.com/integranz/slipway/compare/v1.13.0...v1.14.0) (2026-10-28)
+
+### Features
+
+* **relay:** Cloudflare Worker that turns the GitHub organisation webhook into one poller dispatch ([#42](https://github.com/integranz/slipway/issues/42)) ([8d42e6f](https://github.com/integranz/slipway/commit/8d42e6f5835160a508a87e0d636f77c9a96013d4))
+
 ## [1.13.0](https://github.com/integranz/slipway/compare/v1.12.1...v1.13.0) (2026-10-28)
 
 ### Features
