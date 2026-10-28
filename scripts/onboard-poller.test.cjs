@@ -41,6 +41,21 @@ test("classifier: skips, onboarded, private", () => {
   assert.equal(P.classify(base({ issue: issue([P.LABELS.notOnboarded.name]) })).action, "close-issue", "public again: close the not-onboarded issue");
 });
 
+test("classifier: private repositories follow the organisation plan (ONBOARD_PRIVATE_REPOS auto | onboard | skip)", () => {
+  const priv = (o = {}, org = {}) => P.classify(base({ repo: repo({ private: true }), org, ...o }));
+  assert.equal(priv({}, { plan: "free" }).action, "issue-private"); assert.match(priv({}, { plan: "free" }).reason, /GitHub Free/);
+  assert.equal(priv({}, { plan: null }).action, "issue-private"); assert.match(priv({}, { plan: null }).why, /not visible/, "an unknown plan is treated like Free and names the override");
+  assert.equal(priv({}, {}).action, "issue-private", "no org context at all: the old behaviour");
+  assert.equal(priv({}, { plan: "enterprise" }).action, "dispatch", "a paid plan onboards a private repository with a manifest");
+  assert.equal(priv({ head: null }, { plan: "team" }).action, "welcome", "an empty private repository on a paid plan is greeted");
+  assert.equal(priv({ tree: ["README.md"] }, { plan: "business" }).action, "issue-not-deployable");
+  assert.equal(priv({}, { plan: "free", privateRepos: "onboard" }).action, "dispatch", "the explicit override wins over the plan");
+  assert.equal(priv({}, { plan: "enterprise", privateRepos: "skip" }).action, "issue-private");
+  assert.equal(priv({ issue: issue([P.LABELS.notOnboarded.name]) }, { plan: "enterprise" }).action, "close-issue", "a stale not-onboarded issue closes once the plan allows it");
+  assert.equal(priv({ issue: issue([P.LABELS.notOnboarded.name]) }, { plan: "free" }).action, "skip", "reported once");
+  assert.equal(P.privatePolicy({ plan: "Team" }).onboard, true); assert.equal(P.privatePolicy({}).onboard, false); assert.equal(P.privatePolicy({ privateRepos: "ONBOARD" }).onboard, true);
+});
+
 test("classifier: the welcome issue continues as the onboarding (or not-deployable) issue on the first push; answers on it are merged", () => {
   const w = issue([P.LABELS.welcome.name], { created_at: "2026-10-27T08:00:00Z" });
   const d = P.classify(base({ issue: w })); assert.equal(d.action, "dispatch"); assert.equal(d.relabel, true); assert.equal(d.overrides, undefined); assert.match(d.reason, /first push after the welcome/);
@@ -133,4 +148,5 @@ test("onboard-poller.yml: schedule off the hour, dispatch permission, concurrenc
   const step = wf.jobs.tick.steps.find((s) => s.name === "Poll the organisation");
   assert.ok(step.env.ONBOARD_GITHUB_TOKEN.includes("secrets.ONBOARD_GITHUB_TOKEN")); assert.ok(step.env.ONBOARD_ANSWERS_TEMPLATE.includes("vars.ONBOARD_ANSWERS_TEMPLATE")); assert.ok(step.env.GITHUB_TOKEN.includes("github.token")); assert.ok(step.env.ONBOARD_REVIEWERS.includes("vars.ONBOARD_REVIEWERS"));
   assert.ok(step.env.ONBOARD_SOURCE.includes("inputs.source")); assert.ok(step.env.CURSOR_AUTOMATION_WEBHOOK_URL.includes("vars.CURSOR_AUTOMATION_WEBHOOK_URL")); assert.ok(step.env.CURSOR_AUTOMATION_WEBHOOK_KEY.includes("secrets.CURSOR_AUTOMATION_WEBHOOK_KEY")); assert.ok(step.env.CURSOR_AUTOMATION_KEY_TRANSPORT.includes("vars.CURSOR_AUTOMATION_KEY_TRANSPORT"));
+  assert.ok(step.env.ONBOARD_PRIVATE_REPOS.includes("vars.ONBOARD_PRIVATE_REPOS"));
 });

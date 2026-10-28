@@ -5,7 +5,8 @@
 # Needs: secret ONBOARD_GITHUB_TOKEN (fine-grained: Contents read, Issues write, Administration write (environments,
 # rulesets), Metadata read on the organisation's repositories), the repository variable ONBOARD_ANSWERS_TEMPLATE
 # (organisation defaults with <name> placeholders) and optionally ONBOARD_REVIEWERS (required reviewers of the deployment
-# environment; default: the token's owner). Instant path: the Cloudflare relay (relay/) dispatches this workflow for one
+# environment; default: the token's owner) and ONBOARD_PRIVATE_REPOS (auto | onboard | skip; auto onboards private repositories
+# only when the organisation plan is not GitHub Free, where private repositories have no environment protection). Instant path: the Cloudflare relay (relay/) dispatches this workflow for one
 # repository on repository.created and on pushes to the default branch (input `source`). Optional visible assistant: a
 # webhook-trigger Cursor Automation notified through CURSOR_AUTOMATION_WEBHOOK_URL (variable) + _KEY (secret) + _KEY_TRANSPORT.
 # GitHub disables scheduled workflows in a public repository after 60 days without repository activity: re-enable it under
@@ -57,6 +58,7 @@ jobs:
           ONBOARD_MAX_DISPATCHES: ${{ vars.ONBOARD_MAX_DISPATCHES || '2' }}
           ONBOARD_EXCLUDE: ${{ vars.ONBOARD_EXCLUDE }}
           ONBOARD_REVIEWERS: ${{ vars.ONBOARD_REVIEWERS }}
+          ONBOARD_PRIVATE_REPOS: ${{ vars.ONBOARD_PRIVATE_REPOS || 'auto' }}
           ONBOARD_SOURCE: ${{ inputs.source }}
           CURSOR_AUTOMATION_WEBHOOK_URL: ${{ vars.CURSOR_AUTOMATION_WEBHOOK_URL }}
           CURSOR_AUTOMATION_WEBHOOK_KEY: ${{ secrets.CURSOR_AUTOMATION_WEBHOOK_KEY }}
