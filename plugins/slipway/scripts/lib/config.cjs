@@ -67,6 +67,9 @@ function checkConfig(config, options) {
     if (!s) { errors.push(`apps.${app.name}.stack=${app.stack}: unknown stack`); continue; }
     if (s.status !== "implemented") errors.push(`apps.${app.name}.stack=${app.stack} is '${s.status}' and not selectable yet. Implemented: ${Object.entries(stackOpts).filter(([, o]) => o.status === "implemented").map(([k]) => k).join(", ")}`);
     if (s.kinds && !s.kinds.includes(app.kind)) errors.push(`apps.${app.name}: stack ${app.stack} supports kinds [${s.kinds.join(", ")}], not '${app.kind}'`);
+    const sc = app.scale || {};
+    if (app.kind === "worker" && sc.min === 0) errors.push(`apps.${app.name}.scale.min: a worker has no scale rule, so 0 replicas would never scale back up; use at least 1`);
+    if (sc.min !== undefined && sc.max !== undefined && sc.max < sc.min) errors.push(`apps.${app.name}.scale: max (${sc.max}) is below min (${sc.min})`);
   }
   for (const app of config.apps) for (const up of app.upstreams || []) {
     if (!names.has(up)) errors.push(`apps.${app.name}.upstreams: '${up}' is not an app in this config`);
@@ -217,11 +220,11 @@ function derive(config, options, repoRoot) {
       test_services: (a.test_services || []).map(s => ({ ...s, env_list: Object.entries(s.env || {}).map(([k, v]) => ({ name: k, value: v })) })),
       test_env_list: Object.entries(a.test_env || {}).map(([k, v]) => ({ name: k, value: v })),
       external: a.kind !== "worker", has_ingress: a.kind !== "worker",
-      secrets: (a.secrets || []).map(s => ({ ...s, kv_name: kvSecretName(s.name) })), env_list: Object.entries(a.env || {}).map(([k, v]) => ({ name: k, value: v })),
+      secrets: (a.secrets || []).map(s => ({ ...s, kv_name: kvSecretName(s.name) })), kv_secret_names: (a.secrets || []).map(s => kvSecretName(s.name)).join(","), env_list: Object.entries(a.env || {}).map(([k, v]) => ({ name: k, value: v })),
       container_app_name: containerAppName(a.name), identity_name_app: `id-${config.project.name}-${a.name}`,
       cpu: (a.resources && a.resources.cpu) || 0.25, memory: (a.resources && a.resources.memory) || "0.5Gi",
       // a worker has no scale rule, so more than one replica would only duplicate its work: max follows min unless set
-      min_replicas: minReplicas, max_replicas: (a.scale && a.scale.max) || (a.kind === "worker" ? Math.max(1, minReplicas) : 2),
+      min_replicas: minReplicas, max_replicas: (a.scale && a.scale.max) || Math.max(minReplicas, a.kind === "worker" ? 1 : 2),
       upstream_names: a.upstreams || [],
       build, upstream_list: upstreams, primary_upstream: upstreams[0] || null,
       // per-app delivery

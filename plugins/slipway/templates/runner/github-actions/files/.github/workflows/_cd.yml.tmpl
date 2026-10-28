@@ -72,15 +72,18 @@ jobs:
           KV_SECRETS: ${{ inputs.kv_secrets }}
         run: |
           # Container Apps refuses to provision a revision whose Key Vault reference cannot be resolved, and that would only
-          # surface after the approval. Names are listed through ARM (metadata only, never values).
-          names="$(az rest --method GET --url "https://management.azure.com/subscriptions/$ARM_SUBSCRIPTION_ID/resourceGroups/<% azure.resource_group %>/providers/Microsoft.KeyVault/vaults/<% azure.key_vault_name %>/secrets?api-version=2023-07-01" --query "value[].name" -o tsv)"
+          # surface after the approval. Each name is read through ARM (metadata only, never a value); 404 means missing.
+          base="https://management.azure.com/subscriptions/$ARM_SUBSCRIPTION_ID/resourceGroups/<% azure.resource_group %>/providers/Microsoft.KeyVault/vaults/<% azure.key_vault_name %>/secrets"
           missing=0
           for s in ${KV_SECRETS//,/ }; do
-            if printf '%s\n' "$names" | grep -qx "$s"; then echo "  ok: $s"; else
-              echo "::error::Key Vault secret '$s' does not exist in <% azure.key_vault_name %>. Set it in your terminal (the value typed at a silent prompt): read -rs V && az keyvault secret set --vault-name <% azure.key_vault_name %> --name $s --value \"\$V\" -o none; unset V"; missing=1
+            if az rest --method GET --url "$base/$s?api-version=2023-07-01" -o none 2>kv-err.txt; then echo "  ok: $s"
+            elif grep -Eq 'NotFound|404' kv-err.txt; then
+              echo "::error::Key Vault secret '$s' does not exist in <% azure.key_vault_name %>. Set it as .slipway/SETUP.md describes, or in your terminal with the value typed at a silent prompt: read -rs V && az keyvault secret set --vault-name <% azure.key_vault_name %> --name $s --value \"\$V\" -o none; unset V"; missing=1
+            else
+              echo "::error::could not read the metadata of Key Vault secret '$s' through ARM: $(head -c 300 kv-err.txt). The CI/CD identity needs Microsoft.KeyVault/vaults/secrets/read on the vault (Reader or Contributor on its resource group)."; missing=1
             fi
           done
-          exit $missing
+          rm -f kv-err.txt; exit $missing
 <%#eq options.registry "acr"%>      - name: The image must exist for this tag
         run: |
           d=$(az acr repository show -n <% azure.acr_name %> --image "${{ inputs.image_repository }}:$IMAGE_TAG" --query digest -o tsv 2>/dev/null || true)
@@ -107,6 +110,7 @@ jobs:
             ${{ inputs.infra_dir }}/tfplan
             ${{ inputs.infra_dir }}/plan.txt
             ${{ inputs.infra_dir }}/.terraform.lock.hcl
+          include-hidden-files: true   # upload-artifact skips dot-files by default; the lock file must travel with the plan
           retention-days: 1
 <%#if derived.tracker_rest%>      - name: Tracker — deploy subtask In Progress (Jira REST)
         if: always()

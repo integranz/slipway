@@ -498,6 +498,8 @@ test("env names: .NET Section__Key names validate and render verbatim; names tha
   }
   const badSecret = mkRepo(c => { c.apps[0].secrets = [{ name: "x", env: "9_LIVES" }]; });
   assert.notEqual(validate(path.join(badSecret, ".slipway", "config.yaml")).status, 0, "a secret env name starting with a digit is rejected");
+});
+
 test("CD hardening: bash pipefail, Key Vault pre-check, lock file with the plan, GITHUB_OUTPUT via os.environ; startup probe; worker scale and comment; dhi login gated by the Dockerfile", () => {
   const repo = mkRepo(c => { c.apps[0].secrets = [{ name: "db-password", env: "DB_PASSWORD" }]; c.apps.push({ name: "jobs", path: "apps/jobs", kind: "worker", stack: "custom", image_repository: "adlc-demo/jobs" }); });
   fs.mkdirSync(path.join(repo, "apps/jobs"), { recursive: true }); fs.writeFileSync(path.join(repo, "apps/jobs/Dockerfile"), "FROM node:22\n");
@@ -505,17 +507,23 @@ test("CD hardening: bash pipefail, Key Vault pre-check, lock file with the plan,
   const cdText = read(repo, ".github/workflows/_cd.yml"); const cd = yaml.load(cdText);
   for (const j of ["plan", "apply"]) assert.deepEqual(cd.jobs[j].defaults, { run: { shell: "bash" } }, `${j} must run bash (-e -o pipefail)`);
   assert.ok(cd.on.workflow_call.inputs.kv_secrets, "kv_secrets input");
-  const check = cd.jobs.plan.steps.find(s => /Key Vault secrets/.test(s.name)); assert.equal(check.if, "inputs.kv_secrets != ''"); assert.match(check.run, /Microsoft\.KeyVault\/vaults\/kv-adlc-demo-dev\/secrets\?api-version=2023-07-01/); assert.match(check.run, /az keyvault secret set --vault-name kv-adlc-demo-dev/);
+  const check = cd.jobs.plan.steps.find(s => /Key Vault secrets/.test(s.name)); assert.equal(check.if, "inputs.kv_secrets != ''"); assert.match(check.run, /Microsoft\.KeyVault\/vaults\/kv-adlc-demo-dev\/secrets"/); assert.match(check.run, /"\$base\/\$s\?api-version=2023-07-01"/, "one GET per secret: no paging, no SIGPIPE"); assert.match(check.run, /az keyvault secret set --vault-name kv-adlc-demo-dev/); assert.match(check.run, /secrets\/read/, "names the missing role on an ARM error");
   assert.ok(cd.jobs.plan.steps.indexOf(check) < cd.jobs.plan.steps.findIndex(s => /terraform init/.test(s.run || "")), "the secret check runs before the plan");
-  const upload = cd.jobs.plan.steps.find(s => s.uses === "actions/upload-artifact@v7"); assert.match(upload.with.path, /\.terraform\.lock\.hcl/);
+  const upload = cd.jobs.plan.steps.find(s => s.uses === "actions/upload-artifact@v7"); assert.match(upload.with.path, /\.terraform\.lock\.hcl/); assert.equal(upload.with["include-hidden-files"], true, "upload-artifact skips dot-files unless told otherwise");
   assert.match(cdText, /terraform init -input=false -lockfile=readonly\n\s+terraform apply/); assert.match(cdText, /open\(os\.environ\["GITHUB_OUTPUT"\], "a"\)/); assert.doesNotMatch(cdText, /open\("\$GITHUB_OUTPUT"/);
   assert.equal(yaml.load(read(repo, ".github/workflows/slipway-demo-api-cd.yml")).jobs.cd.with.kv_secrets, "db-password");
   assert.equal(yaml.load(read(repo, ".github/workflows/slipway-demo-web-cd.yml")).jobs.cd.with.kv_secrets, "");
   const api = read(repo, "infra/apps/api/main.tf"); assert.match(api, /startup_probe \{[\s\S]*?failure_count_threshold = 30/); assert.match(api, /max_replicas = 2/);
-  assert.ok(api.indexOf("startup_probe {") < api.indexOf("liveness_probe {"));
+  assert.ok(api.indexOf("startup_probe {") < api.indexOf("liveness_probe {")); assert.doesNotMatch(api, /initial_delay/, "the startup probe owns the start-up window");
   const jobs = read(repo, "infra/apps/jobs/main.tf"); assert.doesNotMatch(jobs, /startup_probe|liveness_probe|ingress \{/); assert.match(jobs, /min_replicas = 1\n\s+max_replicas = 1/, "a worker keeps one replica");
   assert.doesNotMatch(jobs, /reach it as http:\/\/jobs/); assert.match(jobs, /A worker: no ingress/);
   const ci = yaml.load(read(repo, ".github/workflows/_ci.yml")); const login = ci.jobs.image.steps.find(s => s.uses === "docker/login-action@v4" && s.with.registry === "dhi.io");
-  assert.equal(login.if, "steps.base.outputs.dhi == 'true'"); const base = ci.jobs.image.steps.find(s => s.id === "base"); assert.match(base.run, /dhi\\\.io\//);
+  assert.equal(login.if, "steps.base.outputs.dhi == 'true'"); const base = ci.jobs.image.steps.find(s => s.id === "base"); assert.match(base.run, /grep -Eqi 'dhi\\\.io\/'/, "any mention of dhi.io in the Dockerfile enables the login");
   tfCheck(path.join(repo, "infra/apps/jobs")); tfCheck(path.join(repo, "infra/apps/api"));
+  // scale rules: max never below min for any kind; a worker cannot sit at 0
+  const tall = mkRepo(c => { c.apps[0].scale = { min: 3 }; }); assert.equal(run(["--repo", tall], tall).status, 0); assert.match(read(tall, "infra/apps/api/main.tf"), /min_replicas = 3\n\s+max_replicas = 3/);
+  const zero = mkRepo(c => { c.apps.push({ name: "jobs", path: "apps/jobs", kind: "worker", stack: "custom", image_repository: "adlc-demo/jobs", scale: { min: 0 } }); });
+  fs.mkdirSync(path.join(zero, "apps/jobs"), { recursive: true }); fs.writeFileSync(path.join(zero, "apps/jobs/Dockerfile"), "FROM node:22\n");
+  const vz = validate(path.join(zero, ".slipway", "config.yaml")); assert.notEqual(vz.status, 0); assert.match(vz.stdout + vz.stderr, /never scale back up/);
+  const inverted = mkRepo(c => { c.apps[0].scale = { min: 2, max: 1 }; }); const vi = validate(path.join(inverted, ".slipway", "config.yaml")); assert.notEqual(vi.status, 0); assert.match(vi.stdout + vi.stderr, /below min/);
 });

@@ -103,8 +103,9 @@ jobs:
 <%#eq options.base_image "dhi"%>      - name: Does this Dockerfile pull from Docker Hardened Images?
         id: base
         run: |
-          if grep -Eq '^\s*FROM\s+(--platform=\S+\s+)?dhi\.io/' "${{ inputs.dockerfile }}"; then echo "dhi=true" >> "$GITHUB_OUTPUT"
-          else echo "dhi=false" >> "$GITHUB_OUTPUT"; echo "no dhi.io base image in ${{ inputs.dockerfile }}: the Docker Hub login is skipped"; fi
+          # any mention of the registry counts (FROM, ARG BASE=dhi.io/..., COPY --from=dhi.io/...); the login is cheap, a missed one is a failed pull
+          if grep -Eqi 'dhi\.io/' "${{ inputs.dockerfile }}"; then echo "dhi=true" >> "$GITHUB_OUTPUT"
+          else echo "dhi=false" >> "$GITHUB_OUTPUT"; echo "no dhi.io image in ${{ inputs.dockerfile }}: the Docker Hub login is skipped"; fi
       - name: Log in to Docker Hardened Images
         if: steps.base.outputs.dhi == 'true'
         uses: docker/login-action@v4
