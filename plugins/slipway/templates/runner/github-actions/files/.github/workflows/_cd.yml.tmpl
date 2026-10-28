@@ -29,6 +29,11 @@ on:
         type: string
         required: false
         default: ""
+      kv_secrets:
+        description: Key Vault secret names the revision references (comma-separated); checked before the plan so a missing one fails here, not at provisioning
+        type: string
+        required: false
+        default: ""
 
 env:
   TF_IN_AUTOMATION: "true"
@@ -44,6 +49,9 @@ jobs:
   plan:
     name: plan ${{ inputs.app }} ${{ inputs.tag }} → ${{ inputs.environment }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash   # GitHub's explicit bash runs with -e and -o pipefail, so a failed terraform behind `| tee` fails the step
     steps:
       - uses: actions/checkout@v7
       - name: Validate the tag
@@ -58,6 +66,24 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Key Vault secrets the revision references must exist
+        if: inputs.kv_secrets != ''
+        env:
+          KV_SECRETS: ${{ inputs.kv_secrets }}
+        run: |
+          # Container Apps refuses to provision a revision whose Key Vault reference cannot be resolved, and that would only
+          # surface after the approval. Each name is read through ARM (metadata only, never a value); 404 means missing.
+          base="https://management.azure.com/subscriptions/$ARM_SUBSCRIPTION_ID/resourceGroups/<% azure.resource_group %>/providers/Microsoft.KeyVault/vaults/<% azure.key_vault_name %>/secrets"
+          missing=0
+          for s in ${KV_SECRETS//,/ }; do
+            if az rest --method GET --url "$base/$s?api-version=2023-07-01" -o none 2>kv-err.txt; then echo "  ok: $s"
+            elif grep -Eq 'NotFound|404' kv-err.txt; then
+              echo "::error::Key Vault secret '$s' does not exist in <% azure.key_vault_name %>. Set it as .slipway/SETUP.md describes, or in your terminal with the value typed at a silent prompt: read -rs V && az keyvault secret set --vault-name <% azure.key_vault_name %> --name $s --value \"\$V\" -o none; unset V"; missing=1
+            else
+              echo "::error::could not read the metadata of Key Vault secret '$s' through ARM: $(head -c 300 kv-err.txt). The CI/CD identity needs Microsoft.KeyVault/vaults/secrets/read on the vault (Reader or Contributor on its resource group)."; missing=1
+            fi
+          done
+          rm -f kv-err.txt; exit $missing
 <%#eq options.registry "acr"%>      - name: The image must exist for this tag
         run: |
           d=$(az acr repository show -n <% azure.acr_name %> --image "${{ inputs.image_repository }}:$IMAGE_TAG" --query digest -o tsv 2>/dev/null || true)
@@ -83,6 +109,8 @@ jobs:
           path: |
             ${{ inputs.infra_dir }}/tfplan
             ${{ inputs.infra_dir }}/plan.txt
+            ${{ inputs.infra_dir }}/.terraform.lock.hcl
+          include-hidden-files: true   # upload-artifact skips dot-files by default; the lock file must travel with the plan
           retention-days: 1
 <%#if derived.tracker_rest%>      - name: Tracker — deploy subtask In Progress (Jira REST)
         if: always()
@@ -104,6 +132,9 @@ jobs:
     name: apply ${{ inputs.app }} ${{ inputs.tag }} → ${{ inputs.environment }}
     needs: plan
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash   # -e -o pipefail: a failed apply behind `| tee` fails the job
     environment:
       name: ${{ inputs.environment }}   # required reviewer approves here, after reading the plan summary
       url: ${{ steps.outputs.outputs.url }}
@@ -125,7 +156,8 @@ jobs:
       - name: terraform apply (the reviewed plan, nothing else)
         working-directory: ${{ inputs.infra_dir }}
         run: |
-          terraform init -input=false
+          # the lock file arrived with the plan: the apply uses exactly the provider versions the plan was made with
+          terraform init -input=false -lockfile=readonly
           terraform apply -input=false -no-color tfplan | tee apply.txt
           echo "## Applied ${{ inputs.app }} ${{ inputs.tag }} → ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
           grep -E '^Apply complete' apply.txt >> "$GITHUB_STEP_SUMMARY" || true
@@ -135,10 +167,10 @@ jobs:
         run: |
           terraform output -json > outputs.json
           python3 - <<'PY'
-          import json
+          import json, os
           o={k:v["value"] for k,v in json.load(open("outputs.json")).items()}
           print("\n".join(f"{k}={v}" for k,v in o.items()))
-          with open("$GITHUB_OUTPUT","a") as f: f.write(f"url={o.get('url','')}\n")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f: f.write(f"url={o.get('url','')}\n")
           PY
       - name: Smoke test
         id: smoke

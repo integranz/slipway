@@ -530,7 +530,8 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 300,
-                "default": 2
+                "default": 2,
+                "description": "Unset: 2 for api and frontend apps (never below min), equal to min for workers, which have no scale rule."
               }
             }
           },

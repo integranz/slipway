@@ -1,6 +1,7 @@
-# App layer for `<% app.name %>`: one container app in the shared environment (<%#if derived.platform_shared%>the organisation platform<%else%>infra/foundation<%/if%>). Other apps
+# App layer for `<% app.name %>`: one container app in the shared environment (<%#if derived.platform_shared%>the organisation platform<%else%>infra/foundation<%/if%>).<%#if app.has_ingress%> Other apps
 # reach it as http://<% app.container_app_name %> through the environment proxy<%#if derived.platform_shared%> (names are prefixed by the project because the environment is
-# shared by several repositories)<%/if%>.
+# shared by several repositories)<%/if%>.<%else%> A worker: no ingress, nothing
+# reaches it; it reaches the other apps as http://<%#if derived.platform_shared%><% project.name %>-<app><%else%><app><%/if%> through the environment proxy.<%/if%>
 
 resource "azurerm_container_app" "this" {
   name                         = local.container_app_name
@@ -65,12 +66,22 @@ resource "azurerm_container_app" "this" {
         secret_name = "<% name %>"
       }
 <%/each%><%#if app.health_path%>
+      # First start may take a while (schema applied on start-up, a serverless database resuming): the startup probe allows
+      # up to ~150 s before liveness takes over, so a slow first revision is not restarted in a loop.
+      startup_probe {
+        transport               = "HTTP"
+        port                    = <% app.port %>
+        path                    = "<% app.health_path %>"
+        interval_seconds        = 5
+        timeout                 = 5
+        failure_count_threshold = 30
+      }
+
       liveness_probe {
         transport               = "HTTP"
         port                    = <% app.port %>
         path                    = "<% app.health_path %>"
         interval_seconds        = 10
-        initial_delay           = 5
         failure_count_threshold = 3
       }
 
