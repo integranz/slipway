@@ -66,8 +66,8 @@ resource "azurerm_container_app" "this" {
         secret_name = "<% name %>"
       }
 <%/each%><%#if app.health_path%>
-      # First start may take a while (schema applied on start-up, a serverless database resuming): the startup probe allows
-      # up to ~150 s before liveness takes over, so a slow first revision is not restarted in a loop.
+      # First start may take a while (cold start, image pull, a slow dependency): the startup probe allows up to ~150 s
+      # before liveness takes over, so a slow first revision is not restarted in a loop.
       startup_probe {
         transport               = "HTTP"
         port                    = <% app.port %>

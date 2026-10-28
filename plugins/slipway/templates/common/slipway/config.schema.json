@@ -486,6 +486,11 @@
                   "type": "string",
                   "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
                   "description": "Environment variable name in the container: letters, digits and underscores, not starting with a digit. UPPER_CASE by convention; .NET configuration sections use Section__Key (e.g. ConnectionStrings__Sql)."
+                },
+                "note": {
+                  "type": "string",
+                  "pattern": "^[\\s\\S]{3,300}$",
+                  "description": "How a human produces the value (a script, a portal step, who owns it). Rendered into SETUP.md and .env.example in place of the generic 'put it in .slipway/.env' instruction. Never the value itself."
                 }
               }
             }
